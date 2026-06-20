@@ -2,21 +2,12 @@ import axios, { AxiosInstance, AxiosError } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
 
-// 动态 baseURL：预览环境需要使用后端服务的网络地址
-const getBaseURL = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname
-    // 预览环境：使用后端服务的网络地址
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      // 尝试使用同域名的 8000 端口（如果后端在同一网络）
-      return `http://10.59.26.252:8000`
-    }
-  }
-  return 'http://localhost:8000'
-}
+// Vite 开发模式：通过 3000 端口代理 /api 到 8000
+// 生产模式：前端由后端提供，API 走同域名
+// 统一使用相对路径
 
 const api: AxiosInstance = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: '',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'

@@ -3,8 +3,11 @@
 启动: uvicorn app.main:app --reload --port 8000
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from app.core.config import settings
 from app.core.logger import setup_logging, get_logger
@@ -13,6 +16,8 @@ from app.api import (
     v1_router, auth_router, watchlist_router,
     risk_router, compare_router, announcement_router, ai_router,
 )
+
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -54,11 +59,28 @@ app.include_router(announcement_router)
 app.include_router(ai_router)
 
 
-@app.get("/")
-def health():
-    return {"app": settings.APP_NAME, "status": "running", "version": "0.1.0"}
-
-
 @app.get(f"{settings.API_PREFIX}/ping")
 def ping():
     return {"code": 0, "message": "pong"}
+
+
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    def serve_index():
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_spa(full_path: str):
+        if full_path.startswith(settings.API_PREFIX.lstrip("/")):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
+        requested = FRONTEND_DIST / full_path
+        if requested.exists() and requested.is_file():
+            return FileResponse(str(requested))
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
+else:
+    @app.get("/")
+    def health():
+        return {"app": settings.APP_NAME, "status": "running", "version": "0.1.0"}
