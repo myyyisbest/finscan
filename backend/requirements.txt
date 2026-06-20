@@ -1,0 +1,40 @@
+# ===== finscan backend 依赖 =====
+# 采集层
+baostock==0.8.9
+akshare>=1.16,<1.19
+requests>=2.32,<3
+
+# 数据处理
+pandas==2.2.3
+numpy==2.1.3
+
+# Web 框架
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# ORM / 数据库
+SQLAlchemy==2.0.36
+PyMySQL==1.1.1
+alembic==1.14.0
+
+# 鉴权
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.20
+
+# 调度
+APScheduler==3.10.4
+
+# AI（DeepSeek 走 OpenAI 兼容接口）
+openai==1.58.1
+
+# 配置与校验
+pydantic==2.10.4
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# 导出
+openpyxl==3.1.5
+
+# 测试
+pytest==8.3.4

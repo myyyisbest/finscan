@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# 虚拟环境
+.venv/
+venv/
+
+# 数据文件（不提交 SQLite 数据库和样本 CSV）
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# 环境变量（含密钥，不提交真实 .env）
+backend/.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node.js（前端预留）
+node_modules/
+frontend/dist/
+
+# 日志
+*.log
+
+# 探测产物（大文件，不入库）
+docs/sample_*.csv
+docs/probe_baostock_*.json
+docs/probe_baostock_*.csv
+
+# 采集临时数据
+backend/scripts/output/
