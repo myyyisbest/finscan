@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logger import setup_logging, get_logger
 from app.core.exceptions import register_exception_handlers
+from app.api import v1_router
 
 
 @asynccontextmanager
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 register_exception_handlers(app)
+app.include_router(v1_router)
 
 
 @app.get("/")
