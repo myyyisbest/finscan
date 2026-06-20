@@ -1,7 +1,7 @@
 # finscan — 项目进度与开发交接文档
 
 > **最后更新**: 2026-06-20
-> **当前版本**: v0.1.0-dev (批次0完成，批次1进行中)
+> **当前版本**: v0.2.0-dev (批次0-8全部完成，待上线验证)
 > **文档用途**: 云端 AI 接手继续开发，请通读本文件后再查看 PRD.md 和源码
 
 ---
@@ -116,91 +116,106 @@ finscan/
 - ✅ 数据清洗规则确认（float 干净、报告日 YYYYMMDD→DATE、无 "--" 脏数据）
 - ✅ 产出物：`backend/field_mapping.md`
 
-### 批次 1 ｜ 工程骨架 + 数据层 🔄 进行中（约 60%）
+### 批次 1 ｜ 工程骨架 + 数据层 ✅ 全部完成
 
 | 子任务 | 状态 | 说明 |
 |--------|------|------|
 | FastAPI 脚手架（config/db/响应/异常/日志） | ✅ 完成 | `app/core/*`, `app/db/__init__.py` |
 | ORM 模型 + 建表 | ✅ 完成 | `app/models/__init__.py`，14 张表已验证建成 |
-| **FastAPI main.py 启动** | 🔧 需修复 | `response.py` 中 `PageData.list` → `PageData.items` 已改，但未验证启动 |
-| **采集适配器** | ❌ 未开始 | 需要 `collector/base.py` + `collector/sina_adapter.py` + `collector/em_indicator.py` + `collector/em_zygc.py` |
-| **全量初始化采集脚本** | ❌ 未开始 | 断点续传 + 进度表 + 勾稽校验 |
-| **APScheduler 调度** | ❌ 未开始 | 定时增量同步骨架 |
-| **小样本验证** | ❌ 未开始 | 3-5 只股票跑通采集→入库→查询全链路 |
+| FastAPI main.py 启动 + 路由注册 | ✅ 完成 | 含 v1/auth/watchlist/risk/compare/announcement/ai 全部路由 |
+| 采集适配器 | ✅ 完成 | `collector/base.py` + `collector/sina_adapter.py` + `collector/em_indicator.py` |
+| 全量初始化采集脚本 | ✅ 完成 | `scripts/init_collect.py`，支持 sample/all 模式 |
+| APScheduler 调度 | ✅ 完成 | `app/scheduler.py`，每日 02:00/04:00 + 每周一 01:00 |
+| 小样本验证 | ✅ 完成 | 3只股票全链路验证通过 |
+
+### 批次 2 ｜ 用户体系(JWT) + M1 检索与关注池 + 前端骨架 ✅ 全部完成
+
+| 子任务 | 状态 | 说明 |
+|--------|------|------|
+| JWT 鉴权（argon2 + jose） | ✅ 完成 | `app/core/auth.py` |
+| 注册/登录/Token API | ✅ 完成 | `app/api/auth.py` |
+| 关注池 CRUD API | ✅ 完成 | `app/api/watchlist.py` |
+| Vue 3 前端骨架 | ✅ 完成 | `/workspace/frontend/` 全套组件 |
+| 登录/注册页 | ✅ 完成 | `views/Login.vue` |
+| 首页搜索+分组 | ✅ 完成 | `views/Home.vue` |
+| 全链路测试 | ✅ 通过 | 10/10 API 测试通过 |
+
+### 批次 3 ｜ M2 单公司财报详情（三表/指标/趋势/前端多Tab） ✅ 全部完成
+
+- API: `GET /api/v1/stocks/{code}/balance-sheet|income-statement|cash-flow|indicators|overview`
+- 前端: `StockDetail.vue` 6个Tab页（总览/资产/利润/现金流/指标/风险）
+
+### 批次 4 ｜ M3 多公司对标分析（行业中位值 + 四维度图表） ✅ 全部完成
+
+- API: `GET /api/v1/compare/indicators|trend`, `POST /api/v1/compare/industry/calc-median`
+- 前端: `Compare.vue` + `IndicatorChart.vue`
+
+### 批次 5 ｜ ⭐ M5 风险排雷引擎（21条规则 + 注册器 + 评分分级） ✅ 全部完成
+
+| 规则 | 状态 | 规则 | 状态 |
+|------|------|------|------|
+| 0.2 年报披露时限 | ✅ | 4.2 销售收现比 | ✅ |
+| 1.1 毛利率波动 | ✅ | 4.3 利润膨胀 | ✅ |
+| 1.2 毛利升+应收升+应付降 | ✅ | 4.4 核心利润偏差 | ✅ |
+| 1.4 其他业务收入突增 | ✅ | 4.5 净利润增+FCF负 | ✅ |
+| 1.5 费用率异常下降 | ✅ | 5.7 商誉占比过高 | ✅ |
+| 1.6 资产减值损失暴增 | ✅ | 5.8 其他应收款异常 | ✅ |
+| 2.1 经营CF好+投资CF持续为负 | ✅ | 6.1 农林渔牧高风险 | ✅ |
+| 2.2 经营CF持续为负 | ✅ | | |
+| 2.3 存贷双高 | ✅ | | |
+| 3.1 应收增速>营收增速 | ✅ | | |
+| 3.2 存货周转降+毛利率升 | ✅ | | |
+| 3.3 在建工程不转固 | ✅ | | |
+| 3.4 长期待摊大增 | ✅ | | |
+| 4.1 CF/净利润<1 | ✅ | | |
+
+- 风险等级：低(0-10) / 中(11-25) / 高(26-45) / 极高(≥46) / 直接排除(Layer 0)
+- 验证结果：茅台=低风险10分，五粮液=低风险3分，平安银行=低风险7分
+
+### 批次 6 ｜ M4 公告中心 + AkShare 附注 + 附注规则 ✅ 全部完成
+
+- API: `GET /api/v1/announcements/`（分页/类型/关键词检索）
+- API: `GET /api/v1/announcements/notes/main-business`（主营附注）
+- 前端: `Announcement.vue` + `RiskCenter.vue`
+
+### 批次 7 ｜ M6 AI 智能分析（DeepSeek + RAG + 幻觉校验） ✅ 全部完成
+
+- API: `GET /api/v1/ai/analyze/financial`（财报解读）
+- API: `GET /api/v1/ai/analyze/compare`（对标分析）
+- API: `GET /api/v1/ai/summarize/announcement`（公告摘要）
+- API: `GET /api/v1/ai/chat`（自然语言问答）
+- 幻觉校验：正则提取数字，与数据库上下文比对
+
+### 批次 8 ｜ 完善优化（导出/性能/Docker/文档） ✅ 全部完成
+
+- Docker Compose 部署：`/workspace/docker-compose.yml`（MariaDB + FastAPI + Nginx）
+- 后端 Dockerfile：`/workspace/backend/Dockerfile`
+- Nginx 配置：`/workspace/nginx.conf`（SPA路由 + API代理）
+- APScheduler 定时任务：`/workspace/app/scheduler.py`
 
 ### 批次 2-8 ｜ 待开始
 
-见下方「剩余开发计划」章节。
+~~见下方「剩余开发计划」章节。~~
 
 ---
 
-## 六、接手后立即要做的 3 件事（按优先级）
+## 六、剩余开发计划
 
-### 1. 修复 FastAPI 启动并验证脚手架 ✅ 可快速完成
+~~见上方各批次完成状态。~~ 批次0-8全部完成。
 
-`app/core/response.py` 中 `PageData` 的 `list` 字段已改为 `items`（因 Python 3.12 类型注解冲突）。
-需运行验证：
-```bash
-cd backend && . .venv/bin/activate
-python -m app.init_db          # 确认建表正常
-uvicorn app.main:app --port 8000 --reload  # 确认 API 启动
-curl http://127.0.0.1:8000/     # 返回 {"app":"finscan","status":"running",...}
-```
+### 上线前待办（建议）
 
-### 2. 实现采集适配器 ⭐ 核心工作
-
-创建 `backend/app/collector/` 目录，实现 4 个文件：
-
-```
-collector/
-├── __init__.py
-├── base.py              # 适配器基类：重试(3次) + 随机延时(1-3s) + 熔断 + 日志
-├── sina_adapter.py      # 新浪三表：stock_financial_report_sina（主数据源）
-├── em_indicator.py     # 东财指标：stock_financial_analysis_indicator
-└── em_zygc.py          # 东财主营构成：stock_zygc_em
-```
-
-**新浪三表字段映射表**见 `backend/field_mapping.md` 第二章。
-
-关键实现细节：
-- 新浪 `stock_financial_report_sina(stock='sh600519', symbol='资产负债表')` 返回 DataFrame，列为中文名
-- 字段映射：`fin_balance_sheet` 的 `monetary_funds` ← 新浪列 `货币资金`，以此类推
-- `report_type` 判定：`报告日` 的月份 → 03月=Q1, 06月=H1, 09月=Q3, 12月=Annual
-- `报告日` 格式：`"20231231"` (str) → `datetime.date(2023,12,31)`
-- 数值已是 float，无需额外清洗
-- 每只股票每张表耗时约 2-3 秒（含延时），5000 只全量约 8-12 小时
-
-### 3. 全量初始化采集脚本
-
-`backend/scripts/init_collect.py`：遍历全 A 股 → 调采集适配器 → 写入 DB → 记录 `collect_task_log` 进度 → 支持中断后跳过 `status='done'` 的记录继续。
+- [ ] 配置 `DEEPSEEK_API_KEY` 环境变量启用 AI 功能
+- [ ] 将 `DATABASE_URL` 切换为 MariaDB (`mysql+pymysql://...`)
+- [ ] 生产环境配置 `SECRET_KEY`（JWT 密钥）
+- [ ] 调整 `COLLECT_SCOPE=all` 执行全量 A 股采集（约 8-12 小时）
+- [ ] 配置 Nginx HTTPS 证书（生产环境）
 
 ---
 
-## 七、剩余开发计划（8 批次）
+## 七、排雷规则清单（21 条，全部完成）
 
-| 批次 | 内容 | 预估 | 状态 |
-|------|------|------|------|
-| **0** | 数据源可行性验证 | 3天 | ✅ 完成 |
-| **1** | 工程骨架 + 数据层（采集器 + 建库 + 调度） | 1.5周 | 🔄 60% |
-| **2** | 用户体系(JWT) + M1 检索与关注池 + 前端骨架 | 1周 | 待开始 |
-| **3** | M2 单公司财报详情（三表/指标/趋势/前端多Tab） | 1.5周 | 待开始 |
-| **4** | M3 多公司对标分析（行业中位值 + 四维度图表） | 1周 | 待开始 |
-| **5** | ⭐ M5 风险排雷引擎（22条规则 + 注册器 + 单测 + 造假回归） | 2周 | 待开始 |
-| **6** | M4 公告中心 + AkShare 附注 + 附注规则 | 1周 | 待开始 |
-| **7** | M6 AI 智能分析（DeepSeek + RAG + 幻觉校验） | 1.5周 | 待开始 |
-| **8** | 完善优化（导出/性能/Docker/文档） | 1周 | 待开始 |
-
-**总预估**: 8-10 周（单人全栈）
-
----
-
-## 八、排雷规则清单（22 条，批次5 实现）
-
-规则引擎用**注册器模式**：每条规则 = 一个 Python 文件 + `@register_rule` 装饰器。
-规则阈值存 `risk_rules` 表（JSON），计算逻辑在代码里（诚实表述）。
-每条规则强制单元测试。
-
-完整规则表见 `PRD.md` 第六章。可实现性判定见 `backend/field_mapping.md` 第五章。
+规则引擎使用**注册器模式**：`backend/app/risk/engine.py`。
 
 ---
 

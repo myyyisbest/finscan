@@ -9,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logger import setup_logging, get_logger
 from app.core.exceptions import register_exception_handlers
-from app.api import v1_router
+from app.api import (
+    v1_router, auth_router, watchlist_router,
+    risk_router, compare_router, announcement_router, ai_router,
+)
 
 
 @asynccontextmanager
@@ -17,8 +20,11 @@ async def lifespan(_: FastAPI):
     setup_logging()
     log = get_logger(__name__)
     log.info("%s 启动 (debug=%s, db=%s)", settings.APP_NAME, settings.DEBUG, settings.DATABASE_URL)
-    # 调度器在批次1.5接入
+    from app.scheduler import start_scheduler
+    start_scheduler()
     yield
+    from app.scheduler import shutdown_scheduler
+    shutdown_scheduler()
     log.info("%s 关闭", settings.APP_NAME)
 
 
@@ -40,6 +46,12 @@ app.add_middleware(
 
 register_exception_handlers(app)
 app.include_router(v1_router)
+app.include_router(auth_router)
+app.include_router(watchlist_router)
+app.include_router(risk_router)
+app.include_router(compare_router)
+app.include_router(announcement_router)
+app.include_router(ai_router)
 
 
 @app.get("/")
