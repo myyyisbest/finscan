@@ -43,6 +43,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
+        "is_admin": user.is_admin,
     })
 
 
@@ -59,6 +60,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
+        "is_admin": user.is_admin,
     })
 
 
@@ -69,4 +71,5 @@ def get_me(user: User = Depends(get_current_user)):
         "username": user.username,
         "email": user.email,
         "is_active": user.is_active,
+        "is_admin": user.is_admin,
     })

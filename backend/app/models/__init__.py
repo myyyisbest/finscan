@@ -30,6 +30,7 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(100), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否管理员")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
