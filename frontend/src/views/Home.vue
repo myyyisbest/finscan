@@ -1,138 +1,136 @@
 <template>
   <div class="home-page">
-    <div class="search-section">
-      <h2 class="section-title">搜索股票</h2>
-      <GlobalSearch />
-    </div>
+    <!-- 欢迎 + 快捷统计 -->
+    <a-row :gutter="16" class="stat-row">
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <a-statistic title="自选股票" :value="totalStocks" :value-style="{ color: '#165DFF' }">
+            <template #suffix>只</template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <a-statistic title="分组数量" :value="groups.length" :value-style="{ color: '#722ED1' }">
+            <template #suffix>个</template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <a-statistic title="近期公告" :value="recentAnnouncements.length" :value-style="{ color: '#13C2C2' }">
+            <template #suffix>条</template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+      <a-col :span="6">
+        <a-card class="stat-card" hoverable>
+          <a-statistic title="风险股" :value="riskStocks" :value-style="{ color: '#F5222D' }">
+            <template #suffix>只</template>
+          </a-statistic>
+        </a-card>
+      </a-col>
+    </a-row>
 
-    <div class="stats-section">
-      <a-row :gutter="16">
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="自选股数量"
-              :value="totalStocks"
-              :value-style="{ color: '#165DFF' }"
-            />
-          </a-card>
-        </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="低风险"
-              :value="riskStats.low"
-              :value-style="{ color: '#52c41a' }"
-            />
-          </a-card>
-        </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="中风险"
-              :value="riskStats.medium"
-              :value-style="{ color: '#faad14' }"
-            />
-          </a-card>
-        </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="高风险"
-              :value="riskStats.high"
-              :value-style="{ color: '#ff4d4f' }"
-            />
-          </a-card>
-        </a-col>
-      </a-row>
-    </div>
-
-    <div class="watchlist-section">
-      <a-row :gutter="16">
-        <a-col :span="6">
-          <a-card class="group-list-card" title="自选分组">
-            <template #extra>
-              <a-button type="link" size="small" @click="showCreateGroupModal">
-                <PlusOutlined /> 新建分组
+    <a-row :gutter="16">
+      <!-- 自选股列表 -->
+      <a-col :span="14">
+        <a-card title="我的自选" :bordered="false" class="main-card">
+          <template #extra>
+            <a-space>
+              <a-select v-model:value="selectedGroup" placeholder="选择分组" style="width: 120px" allow-clear>
+                <a-select-option v-for="g in groups" :key="g.group_name" :value="g.group_name">
+                  {{ g.group_name }} ({{ g.stocks.length }})
+                </a-select-option>
+              </a-select>
+              <a-button type="primary" size="small" @click="showAddModal = true">
+                <PlusOutlined /> 添加
               </a-button>
-            </template>
-            <a-list item-layout="horizontal" :data-source="groups">
-              <template #renderItem="{ item }">
-                <a-list-item
-                  :class="{ 'active-group': selectedGroup === item.group_name }"
-                  @click="selectGroup(item.group_name)"
+            </a-space>
+          </template>
+
+          <a-spin :spinning="loading">
+            <a-row :gutter="[12, 12]">
+              <a-col v-for="stock in displayStocks" :key="stock.stock_code" :span="8">
+                <a-card
+                  size="small"
+                  class="stock-mini-card"
+                  hoverable
+                  @click="goDetail(stock.stock_code)"
                 >
+                  <div class="mini-header">
+                    <span class="mini-name">{{ stock.stock_name }}</span>
+                    <a-tag v-if="stock.is_st" color="red" size="small">ST</a-tag>
+                  </div>
+                  <div class="mini-code">{{ stock.stock_code }}</div>
+                </a-card>
+              </a-col>
+              <a-col v-if="displayStocks.length === 0 && !loading" :span="24">
+                <a-empty description="该分组暂无股票,点击右上角添加">
+                  <a-button type="primary" @click="showAddModal = true">添加股票</a-button>
+                </a-empty>
+              </a-col>
+            </a-row>
+          </a-spin>
+        </a-card>
+      </a-col>
+
+      <!-- 近期公告 -->
+      <a-col :span="10">
+        <a-card title="近期公告" :bordered="false" class="main-card">
+          <template #extra>
+            <a-button type="link" size="small" @click="$router.push('/announcement')">
+              查看全部
+            </a-button>
+          </template>
+
+          <a-spin :spinning="annLoading">
+            <a-list size="small" :data-source="recentAnnouncements" :loading="annLoading">
+              <template #renderItem="{ item }">
+                <a-list-item class="ann-item" @click="goAnnouncement(item)">
                   <a-list-item-meta>
                     <template #title>
-                      <FolderOutlined /> {{ item.group_name }}
+                      <a-badge v-if="item.is_risk" status="error" text="风险" />
+                      {{ item.ann_title }}
                     </template>
                     <template #description>
-                      {{ item.stocks.length }} 只股票
+                      <a-space>
+                        <span class="ann-stock">{{ item.stock_code }}</span>
+                        <span>{{ item.ann_type }}</span>
+                        <span>{{ item.publish_date }}</span>
+                      </a-space>
                     </template>
                   </a-list-item-meta>
                 </a-list-item>
               </template>
             </a-list>
-          </a-card>
-        </a-col>
-        <a-col :span="18">
-          <a-card class="stock-list-card">
-            <template #title>
-              <div class="stock-list-header">
-                <span>{{ selectedGroup || '全部自选' }}</span>
-                <a-button type="primary" size="small" @click="showAddStockModal">
-                  <PlusOutlined /> 添加股票
-                </a-button>
-              </div>
-            </template>
-            <a-spin :spinning="loading">
-              <a-row :gutter="[16, 16]">
-                <a-col
-                  v-for="stock in currentStocks"
-                  :key="stock.stock_code"
-                  :span="8"
-                >
-                  <StockCard :stock="stock" />
-                </a-col>
-              </a-row>
-              <a-empty v-if="!loading && currentStocks.length === 0" description="暂无股票" />
-            </a-spin>
-          </a-card>
-        </a-col>
-      </a-row>
-    </div>
+            <a-empty v-if="recentAnnouncements.length === 0 && !annLoading" description="暂无公告数据" />
+          </a-spin>
+        </a-card>
+      </a-col>
+    </a-row>
 
-    <a-modal
-      v-model:open="addStockModalVisible"
-      title="添加股票"
-      @ok="handleAddStock"
-      :confirm-loading="addStockLoading"
-    >
-      <GlobalSearch @select="handleStockSelect" />
+    <!-- 添加股票弹窗 -->
+    <a-modal v-model:open="showAddModal" title="添加自选股票" @ok="handleAddStock" :confirm-loading="addLoading">
+      <GlobalSearch no-navigate @select="handleStockSelect" style="margin-bottom: 16px" />
       <a-divider />
-      <a-form :model="addStockForm" layout="vertical">
+      <a-form :model="addForm" layout="vertical">
         <a-form-item label="分组" name="group_name">
-          <a-select v-model:value="addStockForm.group_name" placeholder="选择分组">
-            <a-select-option v-for="group in groups" :key="group.group_name" :value="group.group_name">
-              {{ group.group_name }}
+          <a-select v-model:value="addForm.group_name" placeholder="选择或新建分组">
+            <a-select-option v-for="g in groups" :key="g.group_name" :value="g.group_name">
+              {{ g.group_name }}
+            </a-select-option>
+            <a-select-option key="__new__" value="__new__">
+              <span style="color: #1890ff">+ 新建分组</span>
             </a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="备注" name="remark">
-          <a-input v-model:value="addStockForm.remark" placeholder="添加备注 (可选)" />
+        <a-form-item v-if="addForm.group_name === '__new__'" label="新建分组名" name="new_group_name">
+          <a-input v-model:value="addForm.new_group_name" placeholder="输入分组名称" />
         </a-form-item>
-      </a-form>
-    </a-modal>
-
-    <a-modal
-      v-model:open="createGroupModalVisible"
-      title="新建分组"
-      @ok="handleCreateGroup"
-      :confirm-loading="createGroupLoading"
-    >
-      <a-form :model="newGroupForm" layout="vertical">
-        <a-form-item label="分组名称" name="group_name" :rules="[{ required: true, message: '请输入分组名称' }]">
-          <a-input v-model:value="newGroupForm.group_name" placeholder="输入分组名称" />
-        </a-form-item>
+        <div v-if="selectedStockItem" class="selected-stock">
+          已选: <b>{{ selectedStockItem.stock_name }}</b> ({{ selectedStockItem.stock_code }})
+        </div>
       </a-form>
     </a-modal>
   </div>
@@ -140,203 +138,194 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, FolderOutlined } from '@ant-design/icons-vue'
 import GlobalSearch from '@/components/GlobalSearch.vue'
-import StockCard from '@/components/StockCard.vue'
-import { getWatchlistGroups, addToWatchlist, createGroup } from '@/api/watchlist'
-import type { WatchlistGroup, StockSearchItem } from '@/types'
+import { getWatchlistGroups, addToWatchlist as addStock, createGroup } from '@/api/watchlist'
+import { getAnnouncements } from '@/api/announcement'
+
+const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
-const groups = ref<WatchlistGroup[]>([])
-const selectedGroup = ref<string | null>(null)
+const groups = ref<any[]>([])
+const selectedGroup = ref<string | undefined>()
+const showAddModal = ref(false)
+const addLoading = ref(false)
+const selectedStockItem = ref<any>(null)
+const addForm = ref({ group_name: '', new_group_name: '' })
 
-const addStockModalVisible = ref(false)
-const addStockLoading = ref(false)
-const selectedStock = ref<StockSearchItem | null>(null)
-const addStockForm = ref({
-  group_name: '',
-  remark: ''
-})
+const annLoading = ref(false)
+const recentAnnouncements = ref<any[]>([])
 
-const createGroupModalVisible = ref(false)
-const createGroupLoading = ref(false)
-const newGroupForm = ref({
-  group_name: ''
-})
+const totalStocks = computed(() => groups.value.reduce((s, g) => s + g.stocks.length, 0))
+const riskStocks = computed(() => 0)
 
-const totalStocks = computed(() => {
-  return groups.value.reduce((sum, g) => sum + g.stocks.length, 0)
-})
-
-const riskStats = computed(() => {
-  return { low: 0, medium: 0, high: 0 }
-})
-
-const currentStocks = computed(() => {
-  if (!selectedGroup.value) {
-    return groups.value.flatMap(g => g.stocks.map(s => ({
-      stock_code: s.stock_code,
-      stock_name: s.stock_name,
-      is_st: false,
-      industry: null,
-      market: null
-    })))
+const displayStocks = computed(() => {
+  if (selectedGroup.value) {
+    const g = groups.value.find(x => x.group_name === selectedGroup.value)
+    return g ? g.stocks.map((s: any) => ({ stock_code: s.stock_code, stock_name: s.stock_name, is_st: false })) : []
   }
-  const group = groups.value.find(g => g.group_name === selectedGroup.value)
-  if (!group) return []
-  return group.stocks.map(s => ({
-    stock_code: s.stock_code,
-    stock_name: s.stock_name,
-    is_st: false,
-    industry: null,
-    market: null
-  }))
+  return groups.value.flatMap((g: any) =>
+    g.stocks.map((s: any) => ({ stock_code: s.stock_code, stock_name: s.stock_name, is_st: false }))
+  )
 })
 
 const loadGroups = async () => {
   loading.value = true
   try {
-    const response = await getWatchlistGroups()
-    if (response.data.code === 200) {
-      groups.value = response.data.data.groups || []
-      if (groups.value.length > 0 && !selectedGroup.value) {
-        selectedGroup.value = groups.value[0].group_name
-      }
+    const res = await getWatchlistGroups()
+    if (res.data.code === 200) {
+      groups.value = res.data.data.groups || []
     }
-  } catch (error) {
-    console.error('Failed to load groups:', error)
+  } catch (e) {
+    console.error(e)
   } finally {
     loading.value = false
   }
 }
 
-const selectGroup = (groupName: string) => {
-  selectedGroup.value = groupName
-}
-
-const showAddStockModal = () => {
-  addStockModalVisible.value = true
-  selectedStock.value = null
-  addStockForm.value = { group_name: selectedGroup.value || '', remark: '' }
-}
-
-const handleStockSelect = (stockCode: string) => {
-  selectedStock.value = {
-    stock_code: stockCode,
-    stock_name: stockCode,
-    is_st: false,
-    industry: null,
-    market: null
+const loadAnnouncements = async () => {
+  annLoading.value = true
+  try {
+    const res = await getAnnouncements({ page: 1, page_size: 10 })
+    if (res.data.code === 200) {
+      recentAnnouncements.value = res.data.data.items || []
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    annLoading.value = false
   }
+}
+
+const goDetail = (code: string) => {
+  router.push(`/stock/${code}`)
+}
+
+const goAnnouncement = (item: any) => {
+  router.push({ path: '/announcement', query: { stock: item.stock_code } })
+}
+
+const handleStockSelect = (item: { stock_code: string; stock_name: string }) => {
+  selectedStockItem.value = item
 }
 
 const handleAddStock = async () => {
-  if (!selectedStock.value) {
-    message.warning('请先搜索选择股票')
+  if (!selectedStockItem.value) {
+    message.warning('请先搜索并选择股票')
     return
   }
-  if (!addStockForm.value.group_name) {
+  let groupName = addForm.value.group_name
+  if (groupName === '__new__') {
+    if (!addForm.value.new_group_name) {
+      message.warning('请输入新建分组名称')
+      return
+    }
+    try {
+      await createGroup({ group_name: addForm.value.new_group_name })
+      groupName = addForm.value.new_group_name
+    } catch {
+      message.error('创建分组失败')
+      return
+    }
+  }
+  if (!groupName) {
     message.warning('请选择分组')
     return
   }
-
-  addStockLoading.value = true
+  addLoading.value = true
   try {
-    await addToWatchlist({
-      stock_code: selectedStock.value.stock_code,
-      stock_name: selectedStock.value.stock_name,
-      group_name: addStockForm.value.group_name,
-      remark: addStockForm.value.remark
+    await addStock({
+      stock_code: selectedStockItem.value.stock_code,
+      stock_name: selectedStockItem.value.stock_name,
+      group_name: groupName,
     })
     message.success('添加成功')
-    addStockModalVisible.value = false
+    showAddModal.value = false
     loadGroups()
-  } catch (error) {
+  } catch {
     message.error('添加失败')
   } finally {
-    addStockLoading.value = false
-  }
-}
-
-const showCreateGroupModal = () => {
-  createGroupModalVisible.value = true
-  newGroupForm.value.group_name = ''
-}
-
-const handleCreateGroup = async () => {
-  if (!newGroupForm.value.group_name) {
-    message.warning('请输入分组名称')
-    return
-  }
-
-  createGroupLoading.value = true
-  try {
-    await createGroup({ group_name: newGroupForm.value.group_name })
-    message.success('创建成功')
-    createGroupModalVisible.value = false
-    loadGroups()
-  } catch (error) {
-    message.error('创建失败')
-  } finally {
-    createGroupLoading.value = false
+    addLoading.value = false
   }
 }
 
 onMounted(() => {
+  if (route.query.group) {
+    selectedGroup.value = route.query.group as string
+  }
   loadGroups()
+  loadAnnouncements()
 })
 </script>
 
 <style scoped>
 .home-page {
-  padding: 16px;
+  padding: 20px;
 }
 
-.search-section {
-  margin-bottom: 24px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 12px;
-  color: #333;
-}
-
-.stats-section {
-  margin-bottom: 24px;
+.stat-row {
+  margin-bottom: 16px;
 }
 
 .stat-card {
   text-align: center;
 }
 
-.watchlist-section {
-  margin-bottom: 24px;
+.main-card {
+  height: 100%;
 }
 
-.group-list-card {
-  height: fit-content;
-}
-
-.stock-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.active-group {
-  background-color: #e6f7ff;
-  border-radius: 4px;
-}
-
-:deep(.ant-list-item) {
+.stock-mini-card {
   cursor: pointer;
-  padding: 8px 12px;
+  background: #fafafa;
+  transition: all 0.2s;
 }
 
-:deep(.ant-list-item:hover) {
-  background-color: #f5f5f5;
+.stock-mini-card:hover {
+  background: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.mini-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.mini-code {
+  font-size: 12px;
+  color: #999;
+  font-family: 'SF Mono', Consolas, monospace;
+  margin-top: 4px;
+}
+
+.ann-item {
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.ann-item:hover {
+  background: #f5f5f5;
+}
+
+.ann-stock {
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+  color: #1890ff;
+}
+
+.selected-stock {
+  padding: 8px 12px;
+  background: #e6f7ff;
+  border-radius: 4px;
+  color: #1890ff;
 }
 </style>

@@ -21,29 +21,34 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { searchStocks } from '@/api/stock'
-import type { StockSearchItem } from '@/types'
+
+const props = withDefaults(defineProps<{
+  noNavigate?: boolean
+}>(), {
+  noNavigate: false,
+})
+
+const emit = defineEmits<{
+  select: [item: { stock_code: string; stock_name: string }]
+}>()
 
 const router = useRouter()
 const keyword = ref('')
-const searchResults = ref<StockSearchItem[]>([])
+const searchResults = ref<any[]>([])
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const handleSearch = (value: string) => {
-  if (searchTimer) {
-    clearTimeout(searchTimer)
-  }
-  
+  if (searchTimer) clearTimeout(searchTimer)
   if (!value || value.length < 1) {
     searchResults.value = []
     return
   }
-
   searchTimer = setTimeout(async () => {
     try {
       const response = await searchStocks({ keyword: value, page: 1, page_size: 10 })
       if (response.data.code === 200) {
-        searchResults.value = response.data.data.items.map((i: any) => ({
+        searchResults.value = (response.data.data.items || []).map((i: any) => ({
           ...i,
           value: i.stock_code,
         }))
@@ -55,7 +60,15 @@ const handleSearch = (value: string) => {
 }
 
 const handleSelect = (stockCode: string) => {
-  router.push(`/stock/${stockCode}`)
+  const item = searchResults.value.find(i => i.stock_code === stockCode)
+  if (!item) return
+
+  emit('select', { stock_code: item.stock_code, stock_name: item.stock_name })
+
+  if (!props.noNavigate) {
+    router.push(`/stock/${stockCode}`)
+  }
+
   keyword.value = ''
   searchResults.value = []
 }

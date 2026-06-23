@@ -19,11 +19,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Home.vue')
       },
       {
-        path: 'search',
-        name: 'StockSearch',
-        component: () => import('@/views/StockSearch.vue')
-      },
-      {
         path: 'stock/:code',
         name: 'StockDetail',
         component: () => import('@/views/StockDetail.vue')
@@ -32,11 +27,6 @@ const routes: RouteRecordRaw[] = [
         path: 'compare',
         name: 'Compare',
         component: () => import('@/views/Compare.vue')
-      },
-      {
-        path: 'risk',
-        name: 'RiskCenter',
-        component: () => import('@/views/RiskCenter.vue')
       },
       {
         path: 'announcement',

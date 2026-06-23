@@ -1,236 +1,168 @@
 <template>
   <div class="compare-page">
-    <a-card title="股票对比分析" class="compare-card">
+    <a-card title="公司财务对比" class="compare-card">
       <template #extra>
         <a-space>
-          <a-select
-            v-model:value="compareType"
-            style="width: 150px"
-            @change="loadCompareData"
-          >
-            <a-select-option value="profitability">盈利能力</a-select-option>
-            <a-select-option value="efficiency">运营效率</a-select-option>
-            <a-select-option value="structure">资本结构</a-select-option>
-            <a-select-option value="scale">规模对比</a-select-option>
-          </a-select>
-          <a-button @click="showStockPicker = true">添加股票</a-button>
+          <GlobalSearch no-navigate @select="handleAddStock" />
+          <a-button @click="resetCompare">重置</a-button>
         </a-space>
       </template>
 
       <a-spin :spinning="loading">
-        <div class="chart-section">
-          <div ref="chartRef" class="compare-chart"></div>
-        </div>
+        <a-row :gutter="16" v-if="selectedStocks.length > 0">
+          <a-col :span="24">
+            <div class="selected-stocks">
+              <a-tag
+                v-for="s in selectedStocks"
+                :key="s.stock_code"
+                closable
+                @close="removeStock(s.stock_code)"
+                color="blue"
+                class="stock-tag"
+              >
+                {{ s.stock_name }} ({{ s.stock_code }})
+              </a-tag>
+            </div>
+          </a-col>
+        </a-row>
 
+        <!-- 指标对比表 -->
         <a-table
-          :columns="tableColumns"
+          v-if="compareData.length > 0"
+          :columns="compareColumns"
           :data-source="compareData"
           :pagination="false"
+          bordered
+          size="small"
           class="compare-table"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'stock_name'">
-              <a @click="goToStock(record.stock_code)">{{ record.stock_name }}</a>
+            <template v-if="column.key !== 'indicator'">
+              <span :class="getCompareClass(record, column.key)">
+                {{ record[column.key] || '-' }}
+              </span>
             </template>
-            <template v-else-if="column.key === 'value'">
-              <span class="mono-number">{{ formatValue(record.value, column.dataIndex as string) }}</span>
+            <template v-else>
+              <b>{{ record.indicator }}</b>
             </template>
           </template>
         </a-table>
+
+        <a-empty v-if="selectedStocks.length === 0" description="请添加股票进行对比">
+          <template #image>
+            <BarChartOutlined style="font-size: 48px; color: #ccc" />
+          </template>
+        </a-empty>
       </a-spin>
     </a-card>
-
-    <a-modal
-      v-model:open="showStockPicker"
-      title="选择股票"
-      @ok="handleAddStock"
-    >
-      <GlobalSearch @select="handleStockSelect" />
-    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import * as echarts from 'echarts'
+import { ref, computed, onMounted } from 'vue'
+import { BarChartOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import GlobalSearch from '@/components/GlobalSearch.vue'
-import { getStockOverview, getIndicators } from '@/api/stock'
-import type { StockSearchItem } from '@/types'
-
-const router = useRouter()
-const chartRef = ref<HTMLElement | null>(null)
-let chartInstance: echarts.ECharts | null = null
+import { getStockOverview } from '@/api/stock'
 
 const loading = ref(false)
-const showStockPicker = ref(false)
-const compareType = ref('profitability')
-const selectedStocks = ref<StockSearchItem[]>([])
+const selectedStocks = ref<any[]>([])
+
 const compareData = ref<any[]>([])
 
-const metricConfig: Record<string, { key: string; label: string; unit?: string }[]> = {
-  profitability: [
-    { key: 'roe', label: 'ROE', unit: '%' },
-    { key: 'roa', label: 'ROA', unit: '%' },
-    { key: 'gross_margin', label: '毛利率', unit: '%' },
-    { key: 'net_margin', label: '净利率', unit: '%' }
-  ],
-  efficiency: [
-    { key: 'inventory_turnover', label: '存货周转率', unit: '' },
-    { key: 'total_asset_turnover', label: '总资产周转率', unit: '' }
-  ],
-  structure: [
-    { key: 'debt_to_assets', label: '资产负债率', unit: '%' },
-    { key: 'current_ratio', label: '流动比率', unit: '' },
-    { key: 'quick_ratio', label: '速动比率', unit: '' }
-  ],
-  scale: [
-    { key: 'revenue', label: '营收', unit: '亿' },
-    { key: 'net_profit', label: '净利润', unit: '亿' },
-    { key: 'total_assets', label: '总资产', unit: '亿' },
-    { key: 'equity', label: '所有者权益', unit: '亿' }
-  ]
-}
-
-const tableColumns = computed(() => {
-  const metrics = metricConfig[compareType.value]
-  return [
-    { title: '股票', dataIndex: 'stock_name', key: 'stock_name' },
-    { title: '股票代码', dataIndex: 'stock_code', key: 'stock_code' },
-    ...metrics.map(m => ({ title: m.label, dataIndex: m.key, key: m.key }))
-  ]
+const compareColumns = computed(() => {
+  const cols: any[] = [{ title: '指标', key: 'indicator', fixed: 'left', width: 140 }]
+  selectedStocks.value.forEach(s => {
+    cols.push({ title: `${s.stock_name}(${s.stock_code})`, key: s.stock_code, width: 160 })
+  })
+  return cols
 })
 
-const handleStockSelect = (stockCode: string) => {
-  if (!selectedStocks.value.find(s => s.stock_code === stockCode)) {
-    selectedStocks.value.push({
-      stock_code: stockCode,
-      stock_name: stockCode,
-      is_st: false,
-      industry: null,
-      market: null
-    })
+const indicators = [
+  { key: 'pe', label: '市盈率(PE)' },
+  { key: 'pb', label: '市净率(PB)' },
+  { key: 'roe', label: 'ROE(%)' },
+  { key: 'gross_margin', label: '毛利率(%)' },
+  { key: 'net_margin', label: '净利润率(%)' },
+  { key: 'revenue_growth', label: '营收增长率(%)' },
+  { key: 'profit_growth', label: '净利润增长率(%)' },
+  { key: 'debt_ratio', label: '资产负债率(%)' },
+]
+
+const handleAddStock = async (item: { stock_code: string; stock_name: string }) => {
+  if (selectedStocks.value.find(s => s.stock_code === item.stock_code)) {
+    message.warning('已添加该股票')
+    return
   }
+  if (selectedStocks.value.length >= 4) {
+    message.warning('最多对比4家公司')
+    return
+  }
+  selectedStocks.value.push(item)
+  await loadCompare()
 }
 
-const handleAddStock = () => {
-  showStockPicker.value = false
-  loadCompareData()
+const removeStock = async (code: string) => {
+  selectedStocks.value = selectedStocks.value.filter(s => s.stock_code !== code)
+  await loadCompare()
 }
 
-const loadCompareData = async () => {
-  if (selectedStocks.value.length === 0) return
-
-  loading.value = true
+const resetCompare = () => {
+  selectedStocks.value = []
   compareData.value = []
+}
 
+const loadCompare = async () => {
+  if (selectedStocks.value.length === 0) {
+    compareData.value = []
+    return
+  }
+  loading.value = true
   try {
-    const results = await Promise.all(
-      selectedStocks.value.map(async (stock) => {
-        const overviewRes = await getStockOverview(stock.stock_code)
-        const indicatorsRes = await getIndicators(stock.stock_code, { page: 1, page_size: 1 })
-
-        const overview = overviewRes.data.code === 200 ? overviewRes.data.data : null
-        const indicator = indicatorsRes.data.code === 200 && indicatorsRes.data.data.items.length > 0
-          ? indicatorsRes.data.data.items[0]
-          : null
-
-        return {
-          stock_code: stock.stock_code,
-          stock_name: overview?.basic?.stock_name || stock.stock_code,
-          ...(overview?.latest_annual || {}),
-          ...(indicator || {})
-        }
-      })
+    const allOverviews = await Promise.all(
+      selectedStocks.value.map(s => getStockOverview(s.stock_code))
     )
+    const overviewMap: Record<string, any> = {}
+    allOverviews.forEach((res, i) => {
+      if (res.data.code === 200) {
+        overviewMap[selectedStocks.value[i].stock_code] = res.data.data.overview || {}
+      }
+    })
 
-    compareData.value = results
-    nextTick(() => initChart())
-  } catch (error) {
-    console.error('Failed to load compare data:', error)
+    compareData.value = indicators.map(ind => {
+      const row: any = { indicator: ind.label, key: ind.key }
+      selectedStocks.value.forEach(s => {
+        const ov = overviewMap[s.stock_code] || {}
+        let val = ov[ind.key]
+        if (ind.key === 'roe' || ind.key === 'gross_margin' || ind.key === 'net_margin' ||
+            ind.key === 'revenue_growth' || ind.key === 'profit_growth' || ind.key === 'debt_ratio') {
+          val = val != null ? val.toFixed(2) + '%' : '-'
+        }
+        row[s.stock_code] = val != null ? val : '-'
+      })
+      return row
+    })
+  } catch (e) {
+    console.error(e)
   } finally {
     loading.value = false
   }
 }
 
-const initChart = () => {
-  if (!chartRef.value || compareData.value.length === 0) return
-
-  if (chartInstance) {
-    chartInstance.dispose()
+const getCompareClass = (record: any, code: string) => {
+  const val = parseFloat(record[code])
+  if (isNaN(val)) return ''
+  const values = selectedStocks.value.map(s => parseFloat(record[s.stock_code])).filter(v => !isNaN(v))
+  const max = Math.max(...values)
+  const min = Math.min(...values)
+  if (record.indicator === '资产负债率(%)' || record.indicator === '市盈率(PE)') {
+    return val === min ? 'cell-best' : val === max ? 'cell-worst' : ''
   }
-
-  chartInstance = echarts.init(chartRef.value)
-
-  const metrics = metricConfig[compareType.value]
-  const xAxisData = compareData.value.map(d => d.stock_name || d.stock_code)
-  const series = metrics.map(m => ({
-    name: m.label,
-    type: 'bar',
-    data: compareData.value.map(d => {
-      const val = d[m.key]
-      if (val === null || val === undefined) return null
-      if (compareType.value === 'scale') {
-        return (val / 1e8).toFixed(2)
-      }
-      return val
-    })
-  }))
-
-  const option: echarts.EChartsOption = {
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' }
-    },
-    legend: {
-      bottom: 10
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '15%',
-      top: '10%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: xAxisData
-    },
-    yAxis: {
-      type: 'value'
-    },
-    series: series as any
-  }
-
-  chartInstance.setOption(option)
-}
-
-const formatValue = (value: any, key: string): string => {
-  if (value === null || value === undefined) return '-'
-  const config = metricConfig[compareType.value].find(m => m.key === key)
-  if (!config) return String(value)
-
-  if (compareType.value === 'scale' && config.unit === '亿') {
-    return value.toFixed(2) + ' 亿'
-  }
-  return value.toFixed(2) + (config.unit || '')
-}
-
-const goToStock = (code: string) => {
-  router.push(`/stock/${code}`)
-}
-
-const handleResize = () => {
-  chartInstance?.resize()
+  return val === max ? 'cell-best' : val === min ? 'cell-worst' : ''
 }
 
 onMounted(() => {
-  window.addEventListener('resize', handleResize)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
+  // Preload from watchlist if available
 })
 </script>
 
@@ -243,12 +175,28 @@ onUnmounted(() => {
   min-height: 500px;
 }
 
-.chart-section {
-  margin-bottom: 24px;
+.selected-stocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
-.compare-chart {
-  width: 100%;
-  height: 400px;
+.stock-tag {
+  font-size: 14px;
+  padding: 4px 8px;
+}
+
+.compare-table {
+  margin-top: 16px;
+}
+
+.cell-best {
+  color: #52c41a;
+  font-weight: 600;
+}
+
+.cell-worst {
+  color: #cf1322;
 }
 </style>

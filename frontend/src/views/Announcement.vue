@@ -1,205 +1,199 @@
 <template>
   <div class="announcement-page">
-    <a-card title="公告中心" class="announcement-card">
-      <template #extra>
-        <a-space>
-          <a-input-search
-            v-model:value="searchKeyword"
-            placeholder="搜索公告标题"
-            style="width: 200px"
-            @search="loadAnnouncements"
-          />
-          <a-select
-            v-model:value="filterType"
-            placeholder="公告类型"
-            style="width: 120px"
-            allow-clear
-            @change="loadAnnouncements"
-          >
-            <a-select-option value="定期报告">定期报告</a-select-option>
-            <a-select-option value="业绩预告">业绩预告</a-select-option>
-            <a-select-option value="重大事项">重大事项</a-select-option>
-            <a-select-option value="风险提示">风险提示</a-select-option>
-            <a-select-option value="其他">其他</a-select-option>
-          </a-select>
-          <a-select
-            v-model:value="filterRisk"
-            placeholder="风险相关"
-            style="width: 120px"
-            allow-clear
-            @change="loadAnnouncements"
-          >
-            <a-select-option :value="true">仅风险公告</a-select-option>
-            <a-select-option :value="false">全部</a-select-option>
-          </a-select>
-          <a-button @click="loadAnnouncements">
-            <ReloadOutlined /> 刷新
-          </a-button>
-        </a-space>
-      </template>
+    <a-card title="公告信息" class="ann-card">
+      <!-- 筛选工具栏 -->
+      <div class="filter-bar">
+        <a-input-search
+          v-model:value="keyword"
+          placeholder="搜索公告标题..."
+          style="width: 240px"
+          @search="loadAnnouncements"
+          allow-clear
+        />
+        <a-select
+          v-model:value="filterStock"
+          placeholder="股票"
+          style="width: 140px"
+          allow-clear
+          show-search
+          :filter-option="false"
+          @search="searchStock"
+          @change="loadAnnouncements"
+        >
+          <a-select-option v-for="s in stockOptions" :key="s.stock_code" :value="s.stock_code">
+            {{ s.stock_name }} ({{ s.stock_code }})
+          </a-select-option>
+        </a-select>
+        <a-select
+          v-model:value="filterType"
+          placeholder="公告类型"
+          style="width: 140px"
+          allow-clear
+          @change="loadAnnouncements"
+        >
+          <a-select-option value="年度报告">年度报告</a-select-option>
+          <a-select-option value="半年度报告">半年度报告</a-select-option>
+          <a-select-option value="季度报告">季度报告</a-select-option>
+          <a-select-option value="上市公告">上市公告</a-select-option>
+          <a-select-option value="发行公告">发行公告</a-select-option>
+        </a-select>
+        <a-button type="primary" @click="loadAnnouncements">查询</a-button>
+      </div>
 
       <a-spin :spinning="loading">
         <a-table
           :columns="columns"
-          :data-source="announcements"
+          :data-source="list"
           :pagination="pagination"
           @change="handleTableChange"
-          class="announcement-table"
+          size="small"
+          row-key="id"
+          class="ann-table"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'title'">
-              <a @click="showDetail(record)">{{ record.title }}</a>
+            <template v-if="column.key === 'stock_code'">
+              <a @click="$router.push(`/stock/${record.stock_code}`)">
+                {{ record.stock_code }}
+              </a>
+            </template>
+            <template v-else-if="column.key === 'ann_title'">
+              <a @click="showDetail(record)">{{ record.ann_title }}</a>
+              <a-badge v-if="record.is_risk" status="error" text="风险" style="margin-left: 8px" />
             </template>
             <template v-else-if="column.key === 'ann_type'">
-              <a-tag :color="getTypeColor(record.ann_type)">
-                {{ record.ann_type }}
-              </a-tag>
+              <a-tag :color="getTypeColor(record.ann_type)">{{ record.ann_type }}</a-tag>
             </template>
-            <template v-else-if="column.key === 'is_risk'">
-              <a-badge
-                :status="record.is_risk ? 'error' : 'default'"
-                :text="record.is_risk ? '风险' : '正常'"
-              />
+            <template v-else-if="column.key === 'publish_date'">
+              {{ record.publish_date }}
             </template>
-            <template v-else-if="column.key === 'stock_name'">
-              <a v-if="record.stock_code" @click="goToStock(record.stock_code)">
-                {{ record.stock_name || record.stock_code }}
-              </a>
-              <span v-else>-</span>
+            <template v-else-if="column.key === 'action'">
+              <a-button type="link" size="small" @click="showDetail(record)">查看</a-button>
             </template>
           </template>
         </a-table>
       </a-spin>
     </a-card>
 
+    <!-- 详情弹窗 -->
     <a-modal
-      v-model:open="detailModalVisible"
-      :title="selectedAnnouncement?.title"
+      v-model:open="detailVisible"
+      :title="currentAnn?.ann_title"
       width="800px"
       :footer="null"
     >
-      <a-descriptions bordered :column="2" v-if="selectedAnnouncement">
-        <a-descriptions-item label="股票名称">
-          <a @click="goToStock(selectedAnnouncement.stock_code)">
-            {{ selectedAnnouncement.stock_name || '-' }}
-          </a>
-        </a-descriptions-item>
-        <a-descriptions-item label="股票代码">{{ selectedAnnouncement.stock_code || '-' }}</a-descriptions-item>
-        <a-descriptions-item label="公告类型">
-          <a-tag :color="getTypeColor(selectedAnnouncement.ann_type)">
-            {{ selectedAnnouncement.ann_type }}
-          </a-tag>
-        </a-descriptions-item>
-        <a-descriptions-item label="披露日期">{{ selectedAnnouncement.disclosure_date }}</a-descriptions-item>
-        <a-descriptions-item label="风险标识">
-          <a-badge
-            :status="selectedAnnouncement.is_risk ? 'error' : 'success'"
-            :text="selectedAnnouncement.is_risk ? '风险相关' : '正常'"
-          />
-        </a-descriptions-item>
-      </a-descriptions>
-      <a-divider>公告内容</a-divider>
-      <div class="announcement-content" v-if="selectedAnnouncement?.content">
-        {{ selectedAnnouncement.content }}
+      <div v-if="currentAnn">
+        <a-descriptions size="small" :column="2" style="margin-bottom: 12px">
+          <a-descriptions-item label="股票代码">
+            <a @click="$router.push(`/stock/${currentAnn.stock_code}`)">{{ currentAnn.stock_code }}</a>
+          </a-descriptions-item>
+          <a-descriptions-item label="公告类型">
+            <a-tag :color="getTypeColor(currentAnn.ann_type)">{{ currentAnn.ann_type }}</a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item label="发布日期" :span="2">{{ currentAnn.publish_date }}</a-descriptions-item>
+        </a-descriptions>
+        <a-divider style="margin: 12px 0" />
+        <div class="ann-detail-content">{{ currentAnn.content_summary || '暂无摘要内容' }}</div>
+        <div v-if="currentAnn.pdf_url" style="margin-top: 12px">
+          <a :href="currentAnn.pdf_url" target="_blank">查看原文PDF →</a>
+        </div>
       </div>
-      <a-empty v-else description="暂无详细内容" />
     </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { ReloadOutlined } from '@ant-design/icons-vue'
-import { get } from '@/api'
-import type { Announcement } from '@/types'
+import { useRoute } from 'vue-router'
+import { getAnnouncements } from '@/api/announcement'
+import { searchStocks } from '@/api/stock'
+import type { TablePaginationConfig } from 'ant-design-vue'
 
-const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
-const searchKeyword = ref('')
+const list = ref<any[]>([])
+const keyword = ref('')
+const filterStock = ref<string | undefined>()
 const filterType = ref<string | undefined>()
-const filterRisk = ref<boolean | undefined>()
-const announcements = ref<Announcement[]>([])
-const pagination = ref({
+const stockOptions = ref<any[]>([])
+const detailVisible = ref(false)
+const currentAnn = ref<any | null>(null)
+
+const pagination = ref<TablePaginationConfig>({
   current: 1,
   pageSize: 20,
-  total: 0
+  total: 0,
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 条`,
 })
 
-const detailModalVisible = ref(false)
-const selectedAnnouncement = ref<Announcement | null>(null)
-
 const columns = [
-  { title: '公告标题', key: 'title', ellipsis: true },
-  { title: '股票', key: 'stock_name' },
-  { title: '公告类型', key: 'ann_type' },
-  { title: '披露日期', dataIndex: 'disclosure_date', key: 'disclosure_date' },
-  { title: '风险标识', key: 'is_risk' }
+  { title: '股票代码', key: 'stock_code', width: 120 },
+  { title: '公告标题', key: 'ann_title', ellipsis: true },
+  { title: '类型', key: 'ann_type', width: 120 },
+  { title: '发布日期', key: 'publish_date', width: 120 },
+  { title: '操作', key: 'action', width: 80 },
 ]
+
+const getTypeColor = (type: string) => {
+  if (type?.includes('年报')) return 'blue'
+  if (type?.includes('半年')) return 'cyan'
+  if (type?.includes('季报')) return 'green'
+  if (type?.includes('发行') || type?.includes('上市')) return 'purple'
+  return 'default'
+}
 
 const loadAnnouncements = async () => {
   loading.value = true
-
   try {
-    const params: any = {
-      page: pagination.value.current,
-      page_size: pagination.value.pageSize
+    const res = await getAnnouncements({
+      keyword: keyword.value || undefined,
+      stock_code: filterStock.value,
+      ann_type: filterType.value,
+      page: pagination.value.current || 1,
+      page_size: pagination.value.pageSize || 20,
+    })
+    if (res.data.code === 200) {
+      list.value = res.data.data.items || []
+      pagination.value.total = res.data.data.total || 0
     }
-
-    if (searchKeyword.value) {
-      params.keyword = searchKeyword.value
-    }
-    if (filterType.value) {
-      params.ann_type = filterType.value
-    }
-    if (filterRisk.value !== undefined) {
-      params.is_risk = filterRisk.value
-    }
-
-    const response = await get<any>('/api/v1/announcements', params)
-
-    if (response.data.code === 200) {
-      announcements.value = response.data.data.items || []
-      pagination.value.total = response.data.data.total || 0
-    }
-  } catch (error) {
-    console.error('Failed to load announcements:', error)
-    message.error('加载公告失败')
+  } catch (e) {
+    console.error(e)
   } finally {
     loading.value = false
   }
 }
 
-const handleTableChange = (pag: any) => {
+const searchStock = async (value: string) => {
+  if (!value) {
+    stockOptions.value = []
+    return
+  }
+  try {
+    const res = await searchStocks({ keyword: value, page: 1, page_size: 10 })
+    if (res.data.code === 200) {
+      stockOptions.value = res.data.data.items || []
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const handleTableChange = (pag: TablePaginationConfig) => {
   pagination.value.current = pag.current
   pagination.value.pageSize = pag.pageSize
   loadAnnouncements()
 }
 
-const getTypeColor = (type: string): string => {
-  switch (type) {
-    case '定期报告': return 'blue'
-    case '业绩预告': return 'green'
-    case '重大事项': return 'orange'
-    case '风险提示': return 'red'
-    default: return 'default'
-  }
-}
-
-const showDetail = (record: Announcement) => {
-  selectedAnnouncement.value = record
-  detailModalVisible.value = true
-}
-
-const goToStock = (code: string | null) => {
-  if (code) {
-    router.push(`/stock/${code}`)
-  }
+const showDetail = (record: any) => {
+  currentAnn.value = record
+  detailVisible.value = true
 }
 
 onMounted(() => {
+  if (route.query.stock) {
+    filterStock.value = route.query.stock as string
+  }
   loadAnnouncements()
 })
 </script>
@@ -209,14 +203,26 @@ onMounted(() => {
   padding: 16px;
 }
 
-.announcement-card {
+.ann-card {
   min-height: 500px;
 }
 
-.announcement-content {
-  max-height: 400px;
-  overflow-y: auto;
-  white-space: pre-wrap;
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ann-table {
+  margin-top: 8px;
+}
+
+.ann-detail-content {
   line-height: 1.8;
+  color: #333;
+  white-space: pre-wrap;
+  font-size: 14px;
 }
 </style>

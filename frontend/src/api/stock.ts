@@ -29,6 +29,23 @@ export const getIndicators = (code: string, params?: { page?: number; page_size?
   return get<ApiResponse<PageData<FinIndicator>>>(`/api/v1/stocks/${code}/indicators`, params)
 }
 
+export const getFinancialAnnual = (code: string, year: string) => {
+  return Promise.all([
+    getBalanceSheet(code, { report_type: 'Annual', page: 1, page_size: 1 }),
+    getIncomeStatement(code, { report_type: 'Annual', page: 1, page_size: 1 }),
+    getCashFlow(code, { report_type: 'Annual', page: 1, page_size: 1 }),
+  ])
+}
+
+export const getFinancialQuarter = (code: string, period: string) => {
+  const rt = period // e.g. "Q1", "Q2", "Q3", "Annual"
+  return Promise.all([
+    getBalanceSheet(code, { report_type: rt, page: 1, page_size: 1 }),
+    getIncomeStatement(code, { report_type: rt, page: 1, page_size: 1 }),
+    getCashFlow(code, { report_type: rt, page: 1, page_size: 1 }),
+  ])
+}
+
 export const getRiskAssessment = (code: string, params?: { report_date?: string }) => {
   return get<ApiResponse<any>>(`/api/v1/stocks/${code}/risk-assessment`, params)
 }
