@@ -199,7 +199,7 @@ const loadGroups = async () => {
   try {
     const response = await getWatchlistGroups()
     if (response.data.code === 200) {
-      groups.value = response.data.data || []
+      groups.value = response.data.data.groups || []
       if (groups.value.length > 0 && !selectedGroup.value) {
         selectedGroup.value = groups.value[0].group_name
       }

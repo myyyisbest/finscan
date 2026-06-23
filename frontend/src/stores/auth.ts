@@ -23,8 +23,9 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       const response = await apiLogin({ username, password })
-      if (response.data.data.token) {
-        setToken(response.data.data.token)
+      // 后端返回的是 access_token 字段
+      if (response.data.data.access_token) {
+        setToken(response.data.data.access_token)
         await fetchMe()
       }
       return response

@@ -16,7 +16,7 @@
         </template>
         <span>首页</span>
       </a-menu-item>
-      <a-menu-item key="/">
+      <a-menu-item key="/search">
         <template #icon>
           <SearchOutlined />
         </template>

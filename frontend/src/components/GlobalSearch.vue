@@ -43,7 +43,10 @@ const handleSearch = (value: string) => {
     try {
       const response = await searchStocks({ keyword: value, page: 1, page_size: 10 })
       if (response.data.code === 200) {
-        searchResults.value = response.data.data.items
+        searchResults.value = response.data.data.items.map((i: any) => ({
+          ...i,
+          value: i.stock_code,
+        }))
       }
     } catch (error) {
       console.error('Search failed:', error)

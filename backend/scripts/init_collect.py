@@ -20,6 +20,13 @@ from app.collector.em_indicator import collect_indicators  # noqa: E402
 
 
 # ---- 样例与全量清单 ----
+# 目标采集股票（航天电子、信维通信、西部材料）
+TARGET_LIST = [
+    ("600879.SH", "航天电子"),
+    ("300136.SZ", "信维通信"),
+    ("002149.SZ", "西部材料"),
+]
+
 SAMPLE_LIST = [
     ("600519.SH", "贵州茅台"),
     ("000858.SZ", "五粮液"),
@@ -54,6 +61,9 @@ def main():
     if scope == "all":
         stocks = _fetch_a_share_list() or SAMPLE_LIST
         log.info("使用全量 A 股模式，共 %d 只", len(stocks))
+    elif scope == "target":
+        stocks = TARGET_LIST
+        log.info("使用 target 模式，共 %d 只: %s", len(stocks), stocks)
     else:
         stocks = SAMPLE_LIST
         log.info("使用 sample 模式，共 %d 只: %s", len(stocks), stocks)

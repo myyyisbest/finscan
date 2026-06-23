@@ -15,6 +15,7 @@ uvicorn[standard]==0.32.1
 # ORM / 数据库
 SQLAlchemy==2.0.36
 PyMySQL==1.1.1
+psycopg2-binary==2.9.10
 alembic==1.14.0
 
 # 鉴权

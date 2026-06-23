@@ -2,12 +2,12 @@
 
 所有接口统一返回:
 {
-  "code": 0,
+  "code": 200,
   "message": "success",
   "data": {...},
   "timestamp": 1718888888
 }
-错误码: 0成功 / 1001参数错误 / 2001数据不存在 / 3001权限错误 / 5000服务器错误
+错误码: 200成功 / 1001参数错误 / 2001数据不存在 / 3001权限错误 / 5000服务器错误
 """
 import time
 import math
@@ -18,7 +18,7 @@ T = TypeVar("T")
 
 
 class Response(BaseModel, Generic[T]):
-    code: int = 0
+    code: int = 200
     message: str = "success"
     data: Optional[T] = None
     timestamp: int = 0
@@ -29,7 +29,7 @@ class Response(BaseModel, Generic[T]):
 
 
 def ok(data: Any = None, message: str = "success") -> dict:
-    return {"code": 0, "message": message, "data": data, "timestamp": int(time.time())}
+    return {"code": 200, "message": message, "data": data, "timestamp": int(time.time())}
 
 
 def fail(code: int = 5000, message: str = "error", data: Any = None) -> dict:

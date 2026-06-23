@@ -111,7 +111,7 @@ class BalanceSheet(Base):
 class IncomeStatement(Base):
     __tablename__ = "fin_income_statement"
     __table_args__ = (
-        UniqueConstraint("stock_code", "report_date", name="uk_stock_report"),
+        UniqueConstraint("stock_code", "report_date", name="uk_fin_income_statement_stock_report"),
         Index("ix_fin_income_statement_report_date", "report_date"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -140,7 +140,7 @@ class IncomeStatement(Base):
 class CashFlow(Base):
     __tablename__ = "fin_cash_flow"
     __table_args__ = (
-        UniqueConstraint("stock_code", "report_date", name="uk_stock_report"),
+        UniqueConstraint("stock_code", "report_date", name="uk_fin_cash_flow_stock_report"),
         Index("ix_fin_cash_flow_report_date", "report_date"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -169,7 +169,7 @@ class FinIndicator(Base):
     """
     __tablename__ = "fin_indicators"
     __table_args__ = (
-        UniqueConstraint("stock_code", "report_date", name="uk_stock_report"),
+        UniqueConstraint("stock_code", "report_date", name="uk_fin_indicators_stock_report"),
         Index("ix_fin_indicators_report_date", "report_date"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -257,7 +257,7 @@ class RiskRule(Base):
 class RiskReport(Base):
     __tablename__ = "risk_report"
     __table_args__ = (
-        UniqueConstraint("stock_code", "report_date", name="uk_stock_report"),
+        UniqueConstraint("stock_code", "report_date", name="uk_risk_report_stock_report"),
         Index("idx_risk_level", "risk_level"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
