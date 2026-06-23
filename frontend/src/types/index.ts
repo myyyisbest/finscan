@@ -139,3 +139,11 @@ export interface Announcement {
   stock_code: string | null
   stock_name: string | null
 }
+
+export interface MainIndicatorItem {
+  key: string
+  label: string
+  group: string
+  unit: string
+  values: Record<string, string | null>
+}

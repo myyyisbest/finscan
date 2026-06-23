@@ -71,6 +71,47 @@
     <!-- 右侧：Tab 内容 -->
     <main class="content-panel">
       <a-tabs v-model:active-key="activeTab" class="content-tabs">
+        <!-- 主要指标: 复现东财 财务报表 主要指标页(全量50+字段 × 10期) -->
+        <a-tab-pane key="main" tab="主要指标">
+          <a-spin :spinning="mainIndicatorsLoading">
+            <a-alert v-if="mainIndicatorGroups.length === 0" type="info" message="暂无主要指标数据" show-icon />
+            <template v-else>
+              <div class="toolbar">
+                <a-radio-group v-model:value="mainPeriodCount" size="small" button-style="solid" @change="loadMainIndicators">
+                  <a-radio-button :value="10">近10期</a-radio-button>
+                  <a-radio-button :value="20">近20期</a-radio-button>
+                </a-radio-group>
+                <span class="toolbar-tip">数据来源: 新浪财经 stock_financial_analysis_indicator</span>
+              </div>
+
+              <div class="em-main-table">
+                <div class="em-table-row em-header-row">
+                  <div class="em-cell em-label-cell">指标</div>
+                  <div v-for="p in mainPeriods" :key="p" class="em-cell em-period-cell">{{ p }}</div>
+                </div>
+                <template v-for="(group, gIdx) in mainIndicatorGroups" :key="group.name">
+                  <div class="em-group-row" :class="{ alt: gIdx % 2 === 1 }">{{ group.name }}</div>
+                  <div
+                    v-for="item in group.items"
+                    :key="item.key"
+                    class="em-table-row"
+                  >
+                    <div class="em-cell em-label-cell">{{ item.label }}</div>
+                    <div
+                      v-for="p in mainPeriods"
+                      :key="p"
+                      class="em-cell em-num-cell"
+                      :class="valueClass(item.values[p], item.key)"
+                    >
+                      {{ formatMainValue(item.values[p], item.unit) }}
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </a-spin>
+        </a-tab-pane>
+
         <!-- 财务摘要: 多年对比 -->
         <a-tab-pane key="summary" tab="财务摘要">
           <a-spin :spinning="summaryLoading">
@@ -242,6 +283,7 @@ import {
   getIncomeStatement,
   getCashFlow,
   getIndicators,
+  getMainIndicators,
 } from '@/api/stock'
 import { getAnnouncements } from '@/api/announcement'
 import { getWatchlistGroups, addToWatchlist as addStock, createGroup } from '@/api/watchlist'
@@ -249,10 +291,16 @@ import { getWatchlistGroups, addToWatchlist as addStock, createGroup } from '@/a
 const route = useRoute()
 const code = computed(() => route.params.code as string)
 
-const activeTab = ref('summary')
+const activeTab = ref('main')
 const summaryReportType = ref('Annual')
 const summaryLoading = ref(false)
 const summaryYears = ref<string[]>([])
+
+// ===== 主要指标 Tab(东财『主要指标』复刻) =====
+const mainIndicatorsLoading = ref(false)
+const mainPeriods = ref<string[]>([])
+const mainIndicatorGroups = ref<{ name: string; items: any[] }[]>([])
+const mainPeriodCount = ref(10)
 
 const incomeRows = ref<any[]>([])
 const balanceRows = ref<any[]>([])
@@ -309,17 +357,19 @@ const indicatorCards = computed(() => [
 ])
 
 watch(activeTab, (tab) => {
-  if (tab === 'summary') loadSummary()
+  if (tab === 'main') loadMainIndicators()
+  else if (tab === 'summary') loadSummary()
   else if (tab === 'indicators') loadIndicators()
   else if (tab === 'announcement') loadAnnouncements()
 })
 
+watch(mainPeriodCount, () => loadMainIndicators())
 watch(summaryReportType, () => loadSummary())
 
 onMounted(async () => {
   await loadOverview()
   await loadWatchlist()
-  await loadSummary()
+  await loadMainIndicators()
 })
 
 onBeforeUnmount(() => {
@@ -343,6 +393,80 @@ const loadOverview = async () => {
     }
   } catch (e) {
     console.error(e)
+  }
+}
+
+// ===== 主要指标 =====
+const _fmt = (n: number) => {
+  if (n === null || n === undefined || isNaN(n)) return '-'
+  if (Math.abs(n) >= 1e8) return (n / 1e8).toFixed(2) + '亿'
+  if (Math.abs(n) >= 1e4) return (n / 1e4).toFixed(2) + '万'
+  return n.toFixed(2)
+}
+
+const formatMainValue = (v: string | null, unit: string) => {
+  if (v === null || v === undefined || v === '') return '-'
+  const n = Number(v)
+  if (isNaN(n)) return v
+  if (unit === '元') return _fmt(n)
+  // 比率/倍数/天数/次
+  if (unit === '%' || unit === '倍' || unit === '天' || unit === '次') {
+    // 保留 2 位小数
+    if (Math.abs(n) >= 100) return n.toFixed(0)
+    if (Math.abs(n) >= 10) return n.toFixed(2)
+    return n.toFixed(3)
+  }
+  return n.toFixed(2)
+}
+
+// 给同比/比率上色 (正红负绿, EM 风格)
+const valueClass = (v: string | null, key: string) => {
+  if (v === null || v === undefined || v === '') return ''
+  const n = Number(v)
+  if (isNaN(n) || n === 0) return ''
+  // 增长类指标: 正红(好) 负绿
+  if (
+    key.includes('yoy') ||
+    key === 'roe' || key === 'roe_weighted' || key === 'roa' ||
+    key === 'gross_margin' || key === 'net_margin' || key === 'op_margin' ||
+    key === 'revenue_yoy' || key === 'net_profit_yoy' || key === 'equity_yoy' ||
+    key === 'total_asset_turnover' || key === 'inventory_turnover' || key === 'ar_turnover'
+  ) {
+    return n > 0 ? 'val-up' : 'val-down'
+  }
+  // 越低越好
+  if (key === 'debt_to_assets') {
+    return n > 60 ? 'val-up' : 'val-down'  // 负债率高偏负
+  }
+  return ''
+}
+
+const loadMainIndicators = async () => {
+  mainIndicatorsLoading.value = true
+  try {
+    const res: any = await getMainIndicators(code.value, mainPeriodCount.value)
+    if (res.data.code !== 200) return
+    const data = res.data.data || {}
+    mainPeriods.value = (data.periods || []).map((p: string) => {
+      // 简化为 YY-MM
+      return p.substring(2, 7)
+    })
+    const items: any[] = data.items || []
+    // 按 group 分组
+    const groupMap: Record<string, any[]> = {}
+    items.forEach((it) => {
+      if (!groupMap[it.group]) groupMap[it.group] = []
+      groupMap[it.group].push(it)
+    })
+    // 按固定顺序
+    const order = ['每股指标', '规模', '成长能力', '盈利能力', '收益质量', '财务风险', '营运能力']
+    mainIndicatorGroups.value = order
+      .filter((g) => groupMap[g])
+      .map((g) => ({ name: g, items: groupMap[g] }))
+  } catch (e) {
+    console.error(e)
+  } finally {
+    mainIndicatorsLoading.value = false
   }
 }
 
@@ -755,5 +879,90 @@ const quickAddWatchlist = async () => {
 .ann-date {
   font-size: 12px;
   color: #999;
+}
+
+/* ===== 东财主要指标 表格 ===== */
+.em-main-table {
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.em-table-row {
+  display: flex;
+  border-bottom: 1px solid #f0f0f0;
+  min-width: max-content;
+}
+
+.em-table-row:hover {
+  background: #fafafa;
+}
+
+.em-header-row {
+  background: #f5f5f5;
+  font-weight: 600;
+  color: #333;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.em-cell {
+  padding: 6px 8px;
+  border-right: 1px solid #f0f0f0;
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: right;
+}
+
+.em-label-cell {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  text-align: left;
+  font-weight: 500;
+  min-width: 200px;
+  color: #333;
+  border-right: 1px solid #e8e8e8;
+  z-index: 1;
+}
+
+.em-header-row .em-label-cell {
+  background: #f5f5f5;
+  z-index: 3;
+}
+
+.em-period-cell {
+  text-align: center;
+  font-weight: 500;
+  min-width: 90px;
+}
+
+.em-num-cell {
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: #333;
+}
+
+.em-group-row {
+  background: #eaf2ff;
+  color: #1890ff;
+  font-weight: 600;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid #d0e0f0;
+}
+
+.em-group-row.alt {
+  background: #f0f5ff;
+  color: #722ed1;
+}
+
+.val-up {
+  color: #f5222d;
+}
+
+.val-down {
+  color: #52c41a;
 }
 </style>

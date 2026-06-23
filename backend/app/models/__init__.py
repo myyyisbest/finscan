@@ -232,6 +232,91 @@ class FinIndicator(Base):
     update_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class FinMainIndicator(Base):
+    """东财『主要指标』全量 —— 来自新浪 stock_financial_analysis_indicator 预计算。
+
+    一次性覆盖 EM 财务分析页 主要指标 / 杜邦分析 / 财务风险 / 营运能力 等 80+ 指标。
+    报告期: 季度，按 (stock_code, report_date) 唯一。
+    """
+    __tablename__ = "fin_main_indicators"
+    __table_args__ = (
+        UniqueConstraint("stock_code", "report_date", name="uk_fin_main_stock_report"),
+        Index("ix_fin_main_indicators_report_date", "report_date"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stock_code: Mapped[str] = mapped_column(String(10), index=True)
+    report_date: Mapped[date] = mapped_column(Date)
+    report_type: Mapped[str] = mapped_column(String(10), comment="Q1/H1/Q3/Annual")
+
+    # ===== 每股指标 =====
+    eps_basic: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="基本每股收益(元)")
+    eps_diluted: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="稀释每股收益(元)")
+    eps_weighted: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="加权每股收益(元)")
+    eps_adj: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="调整后每股收益(元)")
+    eps_deduct: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="扣非每股收益(元)")
+    bps: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="每股净资产(元)")
+    bps_adj: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="调整后每股净资产(元)")
+    ocfps: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="每股经营现金流(元)")
+    capital_reserve_per_share: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="每股资本公积金(元)")
+    retained_eps: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="每股未分配利润(元)")
+
+    # ===== 规模(元) =====
+    main_revenue: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="主营业务收入")
+    main_profit: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="主营业务利润")
+    net_profit_deduct: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="扣非净利润(元)")
+    total_assets: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="总资产(元)")
+
+    # ===== 成长性 % =====
+    revenue_yoy: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="主营收入增长率%")
+    net_profit_yoy: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="净利润增长率%")
+    equity_yoy: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="净资产增长率%")
+    total_asset_yoy: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="总资产增长率%")
+
+    # ===== 盈利能力 % =====
+    roe: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="净资产收益率%")
+    roe_weighted: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="加权净资产收益率%")
+    roa: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="总资产利润率%")
+    roa_net: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="总资产净利润率%")
+    net_margin: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="销售净利率%")
+    gross_margin: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="销售毛利率%")
+    main_profit_margin: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="主营业务利润率%")
+    op_margin: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="营业利润率%")
+    cost_to_expense_margin: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="成本费用利润率%")
+    dividend_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="股息发放率%")
+
+    # ===== 收益质量 % =====
+    sales_cash_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="经营现金净流量/销售收入%")
+    cf_to_assets: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="资产的经营现金流量回报率%")
+    cf_to_net_profit: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="经营现金净流量/净利润%")
+    cf_to_debt: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="经营现金净流量/负债%")
+
+    # ===== 偿债能力 =====
+    current_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="流动比率")
+    quick_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="速动比率")
+    cash_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="现金比率%")
+    cash_flow_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="现金流量比率%")
+    debt_to_assets: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="资产负债率%")
+    equity_multiplier: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="权益乘数(负债与所有者权益比率%)")
+    debt_to_equity: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="产权比率%")
+    equity_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="股东权益比率%")
+    long_debt_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="长期负债比率%")
+    fixed_asset_ratio: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="固定资产比重%")
+
+    # ===== 营运能力 =====
+    ar_turnover: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="应收账款周转率(次)")
+    ar_turnover_days: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="应收账款周转天数(天)")
+    inventory_turnover_days: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="存货周转天数(天)")
+    inventory_turnover: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="存货周转率(次)")
+    fixed_asset_turnover: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="固定资产周转率(次)")
+    total_asset_turnover: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="总资产周转率(次)")
+    total_asset_turnover_days: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="总资产周转天数(天)")
+    current_asset_turnover: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="流动资产周转率(次)")
+    current_asset_turnover_days: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="流动资产周转天数(天)")
+    equity_turnover: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="股东权益周转率(次)")
+
+    update_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 # ===================== 附注域 =====================
 
 class NoteMainBusiness(Base):

@@ -33,6 +33,7 @@ from app.collector.sina_adapter import collect_one_stock  # noqa: E402
 from app.collector.em_indicator import collect_indicators  # noqa: E402
 from app.collector.quote import collect_quote  # noqa: E402
 from app.collector.sina_meta import collect_industry, collect_announcements  # noqa: E402
+from app.collector.sina_indicator import SinaMainIndicatorCollector  # noqa: E402
 
 
 # ---- 样例与全量清单 ----
@@ -132,6 +133,20 @@ def main():
             log.info("  (%d/%d) [%s] 公告解析: %d", idx, len(stocks), stock_code, len(n))
         except Exception as exc:  # noqa: BLE001
             log.exception("  [%s] 公告异常: %s", stock_code, exc)
+
+    # ---- 步骤 6: 新浪主要指标(东财『主要指标』全量 50+ 字段) ----
+    log.info("=== 步骤 6: 新浪主要指标(东财全量) ===")
+    try:
+        from app.db import db_session
+        from app.models import StockBasic
+        col = SinaMainIndicatorCollector()
+        with db_session() as db:
+            codes = {c for c, _ in stocks}
+            stock_objs = db.query(StockBasic).filter(StockBasic.stock_code.in_(codes)).all()
+            total = col.run(db, stock_objs)
+            log.info("  主要指标: %s", total)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("  主要指标采集异常: %s", exc)
 
     log.info("采集完成: ok=%d, failed=%d", ok, failed)
 

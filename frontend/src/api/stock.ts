@@ -29,6 +29,13 @@ export const getIndicators = (code: string, params?: { page?: number; page_size?
   return get<ApiResponse<PageData<FinIndicator>>>(`/api/v1/stocks/${code}/indicators`, params)
 }
 
+export const getMainIndicators = (code: string, limit = 20) => {
+  return get<ApiResponse<{ periods: string[]; items: MainIndicatorItem[] }>>(
+    `/api/v1/stocks/${code}/main-indicators`,
+    { limit }
+  )
+}
+
 export const getFinancialAnnual = (code: string, year: string) => {
   return Promise.all([
     getBalanceSheet(code, { report_type: 'Annual', page: 1, page_size: 1 }),

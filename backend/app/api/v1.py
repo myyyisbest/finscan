@@ -12,7 +12,7 @@ from app.core.exceptions import NotFoundError
 from app.db import get_db
 from app.models import (
     StockBasic, BalanceSheet, IncomeStatement, CashFlow, FinIndicator,
-    StockRealtimeQuote,
+    FinMainIndicator, StockRealtimeQuote,
 )
 
 
@@ -222,6 +222,120 @@ def get_indicators(
             "sales_cash_ratio": str(r.sales_cash_ratio) if r.sales_cash_ratio else None,
         }
     return ok(_paginate_query(q, page, page_size, to_item))
+
+
+# ========== 东财主要指标(全量) ==========
+
+_MAIN_FIELDS = [
+    # 每股
+    "eps_basic", "eps_diluted", "eps_weighted", "eps_adj", "eps_deduct",
+    "bps", "bps_adj", "ocfps", "capital_reserve_per_share", "retained_eps",
+    # 规模
+    "main_revenue", "main_profit", "net_profit_deduct", "total_assets",
+    # 成长
+    "revenue_yoy", "net_profit_yoy", "equity_yoy", "total_asset_yoy",
+    # 盈利
+    "roe", "roe_weighted", "roa", "roa_net", "net_margin", "gross_margin",
+    "main_profit_margin", "op_margin", "cost_to_expense_margin", "dividend_ratio",
+    # 收益质量
+    "sales_cash_ratio", "cf_to_assets", "cf_to_net_profit", "cf_to_debt",
+    # 偿债
+    "current_ratio", "quick_ratio", "cash_ratio", "cash_flow_ratio",
+    "debt_to_assets", "equity_multiplier", "debt_to_equity", "equity_ratio",
+    "long_debt_ratio", "fixed_asset_ratio",
+    # 营运
+    "ar_turnover", "ar_turnover_days", "inventory_turnover_days",
+    "inventory_turnover", "fixed_asset_turnover", "total_asset_turnover",
+    "total_asset_turnover_days", "current_asset_turnover",
+    "current_asset_turnover_days", "equity_turnover",
+]
+
+
+@router.get("/stocks/{stock_code}/main-indicators")
+def get_main_indicators(
+    stock_code: str,
+    limit: int = Query(20, ge=1, le=40),
+    db: Session = Depends(get_db),
+):
+    """东财『主要指标』—— 近 N 期全量指标，按报告期倒序。
+
+    返回结构: { code, data: { periods: ['2026-03-31',...], items: [{key, label, group, unit, values: {period: value}}] }}
+    """
+    rows = (
+        db.query(FinMainIndicator)
+        .filter(FinMainIndicator.stock_code == stock_code)
+        .order_by(FinMainIndicator.report_date.desc())
+        .limit(limit)
+        .all()
+    )
+    rows = list(reversed(rows))  # 时间正序
+    periods = [r.report_date.isoformat() for r in rows]
+
+    def _val(obj, f):
+        v = getattr(obj, f, None)
+        if v is None:
+            return None
+        try:
+            s = str(v)
+            if s.endswith(".0000"):
+                s = s[:-5]
+            elif s.endswith(".00"):
+                s = s[:-3]
+            return s
+        except Exception:
+            return None
+
+    def _make_item(key, label, group, unit, fields):
+        values = {p: _val(r, fields) for p, r in zip(periods, rows)}
+        return {"key": key, "label": label, "group": group, "unit": unit, "values": values}
+
+    items = [
+        # 每股
+        _make_item("eps_basic", "基本每股收益(元)", "每股指标", "元", "eps_basic"),
+        _make_item("eps_deduct", "扣非每股收益(元)", "每股指标", "元", "eps_deduct"),
+        _make_item("eps_diluted", "稀释每股收益(元)", "每股指标", "元", "eps_diluted"),
+        _make_item("bps", "每股净资产(元)", "每股指标", "元", "bps"),
+        _make_item("cap_reserve", "每股资本公积金(元)", "每股指标", "元", "capital_reserve_per_share"),
+        _make_item("retained", "每股未分配利润(元)", "每股指标", "元", "retained_eps"),
+        _make_item("ocfps", "每股经营现金流(元)", "每股指标", "元", "ocfps"),
+        # 规模
+        _make_item("main_revenue", "营业总收入(元)", "规模", "元", "main_revenue"),
+        _make_item("net_profit_deduct", "扣非净利润(元)", "规模", "元", "net_profit_deduct"),
+        _make_item("total_assets", "总资产(元)", "规模", "元", "total_assets"),
+        # 成长
+        _make_item("revenue_yoy", "营业总收入同比增长(%)", "成长能力", "%", "revenue_yoy"),
+        _make_item("net_profit_yoy", "归属净利润同比增长(%)", "成长能力", "%", "net_profit_yoy"),
+        _make_item("equity_yoy", "净资产增长率(%)", "成长能力", "%", "equity_yoy"),
+        _make_item("asset_yoy", "总资产增长率(%)", "成长能力", "%", "total_asset_yoy"),
+        # 盈利
+        _make_item("roe", "净资产收益率(%)", "盈利能力", "%", "roe"),
+        _make_item("roe_weighted", "加权净资产收益率(%)", "盈利能力", "%", "roe_weighted"),
+        _make_item("roa", "总资产收益率(%)", "盈利能力", "%", "roa"),
+        _make_item("gross_margin", "销售毛利率(%)", "盈利能力", "%", "gross_margin"),
+        _make_item("net_margin", "销售净利率(%)", "盈利能力", "%", "net_margin"),
+        # 收益质量
+        _make_item("sales_cash_ratio", "经营现金净流量/销售收入(%)", "收益质量", "%", "sales_cash_ratio"),
+        _make_item("cf_to_net_profit", "经营现金净流量/净利润(%)", "收益质量", "%", "cf_to_net_profit"),
+        # 偿债
+        _make_item("current_ratio", "流动比率", "财务风险", "倍", "current_ratio"),
+        _make_item("quick_ratio", "速动比率", "财务风险", "倍", "quick_ratio"),
+        _make_item("cash_flow_ratio", "现金流量比率(%)", "财务风险", "%", "cash_flow_ratio"),
+        _make_item("debt_to_assets", "资产负债率(%)", "财务风险", "%", "debt_to_assets"),
+        _make_item("equity_multiplier", "权益乘数", "财务风险", "倍", "equity_multiplier"),
+        _make_item("debt_to_equity", "产权比率(%)", "财务风险", "%", "debt_to_equity"),
+        # 营运
+        _make_item("total_asset_turnover_days", "总资产周转天数(天)", "营运能力", "天", "total_asset_turnover_days"),
+        _make_item("inventory_turnover_days", "存货周转天数(天)", "营运能力", "天", "inventory_turnover_days"),
+        _make_item("ar_turnover_days", "应收账款周转天数(天)", "营运能力", "天", "ar_turnover_days"),
+        _make_item("total_asset_turnover", "总资产周转率(次)", "营运能力", "次", "total_asset_turnover"),
+        _make_item("inventory_turnover", "存货周转率(次)", "营运能力", "次", "inventory_turnover"),
+        _make_item("ar_turnover", "应收账款周转率(次)", "营运能力", "次", "ar_turnover"),
+    ]
+
+    # 过滤掉全空的项
+    items = [it for it in items if any(v is not None for v in it["values"].values())]
+
+    return ok({"periods": periods, "items": items})
 
 
 # ========== 公司基本信息汇总 ==========
