@@ -32,7 +32,16 @@ def ok(data: Any = None, message: str = "success") -> dict:
     return {"code": 0, "message": message, "data": data, "timestamp": int(time.time())}
 
 
+success_response = ok
+
+
+def fail_response(message: str = "error", code: int = 5000, data: Any = None) -> dict:
+    """fail_response(message, code=xxx) 兼容新API调用方式。"""
+    return {"code": code, "message": message, "data": data, "timestamp": int(time.time())}
+
+
 def fail(code: int = 5000, message: str = "error", data: Any = None) -> dict:
+    """fail(code=xxx, message=xxx) 旧API兼容。"""
     return {"code": code, "message": message, "data": data, "timestamp": int(time.time())}
 
 

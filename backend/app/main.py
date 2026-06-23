@@ -1,6 +1,6 @@
 """finscan FastAPI 应用入口。
 
-启动: uvicorn app.main:app --reload --port 8000
+启动: uvicorn app.main:app --host 0.0.0.0 --port 3000
 """
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,9 +13,11 @@ from app.core.config import settings
 from app.core.logger import setup_logging, get_logger
 from app.core.exceptions import register_exception_handlers
 from app.api import (
-    v1_router, auth_router, watchlist_router,
-    risk_router, compare_router, announcement_router, ai_router,
+    auth_router, watchlist_router, announcement_router,
 )
+from app.api.stock import router as stock_router
+from app.api.finance import router as finance_router
+from app.api.collector import router as collector_router
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
@@ -34,13 +36,12 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="finscan API",
-    description="上市公司财报智能分析与风险排雷系统",
-    version="0.1.0",
+    title="FinScan API",
+    description="上市公司财务分析工具 — 东方财富F10风格",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
-# CORS（开发期允许前端 Vite 直连）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,13 +51,14 @@ app.add_middleware(
 )
 
 register_exception_handlers(app)
-app.include_router(v1_router)
+
+# API 路由
 app.include_router(auth_router)
 app.include_router(watchlist_router)
-app.include_router(risk_router)
-app.include_router(compare_router)
 app.include_router(announcement_router)
-app.include_router(ai_router)
+app.include_router(stock_router)
+app.include_router(finance_router)
+app.include_router(collector_router)
 
 
 @app.get(f"{settings.API_PREFIX}/ping")
@@ -83,4 +85,4 @@ if FRONTEND_DIST.exists():
 else:
     @app.get("/")
     def health():
-        return {"app": settings.APP_NAME, "status": "running", "version": "0.1.0"}
+        return {"app": settings.APP_NAME, "status": "running", "version": "2.0.0"}

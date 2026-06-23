@@ -1,30 +1,28 @@
-import { get, post } from './index'
-import type { ApiResponse, UserInfo } from '@/types'
+import api from './index'
 
 export interface LoginRequest {
   username: string
   password: string
 }
 
-export interface LoginResponse {
-  token: string
-  user: UserInfo
-}
-
-export interface RegisterRequest {
+export interface UserInfo {
+  id: number
   username: string
-  password: string
-  email?: string
+  is_admin: boolean
 }
 
-export const login = (data: LoginRequest) => {
-  return post<ApiResponse<LoginResponse>>('/api/v1/auth/login', data)
+export interface LoginResponse {
+  code: number
+  data: {
+    access_token: string
+    token_type: string
+    user_id: number
+    username: string
+    is_admin: boolean
+  }
 }
 
-export const register = (data: RegisterRequest) => {
-  return post<ApiResponse<any>>('/api/v1/auth/register', data)
-}
-
-export const getMe = () => {
-  return get<ApiResponse<UserInfo>>('/api/v1/auth/me')
+export const authApi = {
+  login: (username: string, password: string) =>
+    api.post<LoginResponse>('/api/v1/auth/login', { username, password }),
 }

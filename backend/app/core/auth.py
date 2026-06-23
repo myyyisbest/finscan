@@ -14,7 +14,7 @@ from app.db import get_db
 from app.models import User
 
 
-_pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer = HTTPBearer(auto_error=False)
 
 

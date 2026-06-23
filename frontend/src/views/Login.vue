@@ -1,183 +1,56 @@
 <template>
   <div class="login-page">
-    <div class="login-container">
+    <div class="login-card">
       <div class="login-header">
-        <h1 class="title">FinScan</h1>
-        <p class="subtitle">金融分析系统</p>
+        <h1 class="login-title">FinScan</h1>
+        <p class="login-subtitle">上市公司财务分析工具</p>
       </div>
-      <a-card class="login-card">
-        <a-tabs v-model:activeKey="activeTab" centered>
-          <a-tab-pane key="login" tab="登录">
-            <a-form
-              :model="loginForm"
-              @finish="handleLogin"
-              layout="vertical"
-            >
-              <a-form-item
-                name="username"
-                :rules="[{ required: true, message: '请输入用户名' }]"
-              >
-                <a-input
-                  v-model:value="loginForm.username"
-                  placeholder="用户名"
-                  size="large"
-                >
-                  <template #prefix><UserOutlined /></template>
-                </a-input>
-              </a-form-item>
-              <a-form-item
-                name="password"
-                :rules="[{ required: true, message: '请输入密码' }]"
-              >
-                <a-input-password
-                  v-model:value="loginForm.password"
-                  placeholder="密码"
-                  size="large"
-                >
-                  <template #prefix><LockOutlined /></template>
-                </a-input-password>
-              </a-form-item>
-              <a-form-item>
-                <a-button
-                  type="primary"
-                  html-type="submit"
-                  size="large"
-                  block
-                  :loading="authStore.loading"
-                >
-                  登录
-                </a-button>
-              </a-form-item>
-            </a-form>
-          </a-tab-pane>
-          <a-tab-pane key="register" tab="注册">
-            <a-form
-              :model="registerForm"
-              @finish="handleRegister"
-              layout="vertical"
-            >
-              <a-form-item
-                name="username"
-                :rules="[{ required: true, message: '请输入用户名' }]"
-              >
-                <a-input
-                  v-model:value="registerForm.username"
-                  placeholder="用户名"
-                  size="large"
-                >
-                  <template #prefix><UserOutlined /></template>
-                </a-input>
-              </a-form-item>
-              <a-form-item
-                name="password"
-                :rules="[{ required: true, message: '请输入密码' }, { min: 6, message: '密码至少6位' }]"
-              >
-                <a-input-password
-                  v-model:value="registerForm.password"
-                  placeholder="密码"
-                  size="large"
-                >
-                  <template #prefix><LockOutlined /></template>
-                </a-input-password>
-              </a-form-item>
-              <a-form-item
-                name="email"
-              >
-                <a-input
-                  v-model:value="registerForm.email"
-                  placeholder="邮箱 (可选)"
-                  size="large"
-                >
-                  <template #prefix><MailOutlined /></template>
-                </a-input>
-              </a-form-item>
-              <a-form-item>
-                <a-button
-                  type="primary"
-                  html-type="submit"
-                  size="large"
-                  block
-                  :loading="authStore.loading"
-                >
-                  注册
-                </a-button>
-              </a-form-item>
-            </a-form>
-          </a-tab-pane>
-        </a-tabs>
-        <a-alert
-          v-if="errorMessage"
-          :message="errorMessage"
-          type="error"
-          show-icon
-          closable
-          class="error-alert"
-          @close="errorMessage = ''"
-        />
-        <a-alert
-          v-if="successMessage"
-          :message="successMessage"
-          type="success"
-          show-icon
-          closable
-          class="success-alert"
-          @close="successMessage = ''"
-        />
-      </a-card>
+      <a-form :model="form" @finish="handleLogin" layout="vertical">
+        <a-form-item name="username" label="用户名" :rules="[{ required: true, message: '请输入用户名' }]">
+          <a-input v-model:value="form.username" placeholder="请输入用户名" size="large" />
+        </a-form-item>
+        <a-form-item name="password" label="密码" :rules="[{ required: true, message: '请输入密码' }]">
+          <a-input-password v-model:value="form.password" placeholder="请输入密码" size="large" @keyup.enter="handleLogin" />
+        </a-form-item>
+        <a-form-item>
+          <a-button type="primary" html-type="submit" size="large" block :loading="loading">
+            登录
+          </a-button>
+        </a-form-item>
+      </a-form>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const loading = ref(false)
 
-const activeTab = ref('login')
-const errorMessage = ref('')
-const successMessage = ref('')
-
-const loginForm = ref({
+const form = reactive({
   username: '',
   password: ''
 })
 
-const registerForm = ref({
-  username: '',
-  password: '',
-  email: ''
-})
-
-const handleLogin = async () => {
-  errorMessage.value = ''
+async function handleLogin() {
+  loading.value = true
   try {
-    await authStore.login(loginForm.value.username, loginForm.value.password)
-    message.success('登录成功')
-    router.push('/')
-  } catch (error: any) {
-    errorMessage.value = error.response?.data?.message || '登录失败，请检查用户名和密码'
-  }
-}
-
-const handleRegister = async () => {
-  errorMessage.value = ''
-  successMessage.value = ''
-  try {
-    await authStore.register(
-      registerForm.value.username,
-      registerForm.value.password,
-      registerForm.value.email
-    )
-    successMessage.value = '注册成功，请登录'
-    activeTab.value = 'login'
-    loginForm.value.username = registerForm.value.username
-  } catch (error: any) {
-    errorMessage.value = error.response?.data?.message || '注册失败'
+    const ok = await authStore.login(form.username, form.password)
+    if (ok) {
+      message.success('登录成功')
+      router.push('/')
+    } else {
+      message.error('用户名或密码错误')
+    }
+  } catch (e) {
+    message.error('登录失败')
+  } finally {
+    loading.value = false
   }
 }
 </script>
@@ -188,40 +61,33 @@ const handleRegister = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #3b82f6 100%);
 }
 
-.login-container {
+.login-card {
   width: 400px;
+  background: #fff;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
-.title {
-  font-size: 36px;
+.login-title {
+  font-size: 32px;
   font-weight: 700;
-  color: #fff;
+  color: #1d4ed8;
+  margin: 0 0 8px;
+  letter-spacing: 2px;
+}
+
+.login-subtitle {
+  color: #666;
+  font-size: 14px;
   margin: 0;
-}
-
-.subtitle {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 8px;
-}
-
-.login-card {
-  border-radius: 8px;
-}
-
-.error-alert {
-  margin-top: 16px;
-}
-
-.success-alert {
-  margin-top: 16px;
 }
 </style>

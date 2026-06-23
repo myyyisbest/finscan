@@ -1,342 +1,394 @@
 <template>
   <div class="home-page">
-    <div class="search-section">
-      <h2 class="section-title">搜索股票</h2>
-      <GlobalSearch />
+    <div class="page-header">
+      <h2 class="page-title">我的自选</h2>
+      <div class="header-actions">
+        <a-button type="primary" @click="refreshData" :loading="loading">
+          <ReloadOutlined /> 刷新数据
+        </a-button>
+        <a-button @click="collectAll" :loading="collecting">
+          <CloudDownloadOutlined /> 采集数据
+        </a-button>
+      </div>
     </div>
 
-    <div class="stats-section">
-      <a-row :gutter="16">
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="自选股数量"
-              :value="totalStocks"
-              :value-style="{ color: '#165DFF' }"
-            />
-          </a-card>
-        </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="低风险"
-              :value="riskStats.low"
-              :value-style="{ color: '#52c41a' }"
-            />
-          </a-card>
-        </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="中风险"
-              :value="riskStats.medium"
-              :value-style="{ color: '#faad14' }"
-            />
-          </a-card>
-        </a-col>
-        <a-col :span="6">
-          <a-card class="stat-card">
-            <a-statistic
-              title="高风险"
-              :value="riskStats.high"
-              :value-style="{ color: '#ff4d4f' }"
-            />
-          </a-card>
-        </a-col>
-      </a-row>
-    </div>
-
-    <div class="watchlist-section">
-      <a-row :gutter="16">
-        <a-col :span="6">
-          <a-card class="group-list-card" title="自选分组">
-            <template #extra>
-              <a-button type="link" size="small" @click="showCreateGroupModal">
-                <PlusOutlined /> 新建分组
+    <a-card class="watchlist-card">
+      <a-spin :spinning="loading">
+        <a-table
+          :columns="columns"
+          :data-source="watchlist"
+          :pagination="false"
+          row-key="stock_code"
+          :scroll="{ x: 1000 }"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'stock_name'">
+              <a @click="goToStock(record.stock_code)" class="stock-link">
+                <span class="stock-code">{{ record.stock_code }}</span>
+                <span class="stock-name-text">{{ record.stock_name }}</span>
+              </a>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-button type="link" danger size="small" @click="removeStock(record)">
+                移除
               </a-button>
             </template>
-            <a-list item-layout="horizontal" :data-source="groups">
-              <template #renderItem="{ item }">
-                <a-list-item
-                  :class="{ 'active-group': selectedGroup === item.group_name }"
-                  @click="selectGroup(item.group_name)"
-                >
-                  <a-list-item-meta>
-                    <template #title>
-                      <FolderOutlined /> {{ item.group_name }}
-                    </template>
-                    <template #description>
-                      {{ item.stocks.length }} 只股票
-                    </template>
-                  </a-list-item-meta>
-                </a-list-item>
-              </template>
-            </a-list>
-          </a-card>
-        </a-col>
-        <a-col :span="18">
-          <a-card class="stock-list-card">
-            <template #title>
-              <div class="stock-list-header">
-                <span>{{ selectedGroup || '全部自选' }}</span>
-                <a-button type="primary" size="small" @click="showAddStockModal">
-                  <PlusOutlined /> 添加股票
-                </a-button>
-              </div>
+            <template v-else-if="column.key === 'latest_report'">
+              <span v-if="record.latest_report">{{ record.latest_report.report_name }}</span>
+              <span v-else class="no-data">未采集</span>
             </template>
-            <a-spin :spinning="loading">
-              <a-row :gutter="[16, 16]">
-                <a-col
-                  v-for="stock in currentStocks"
-                  :key="stock.stock_code"
-                  :span="8"
-                >
-                  <StockCard :stock="stock" />
-                </a-col>
-              </a-row>
-              <a-empty v-if="!loading && currentStocks.length === 0" description="暂无股票" />
-            </a-spin>
-          </a-card>
-        </a-col>
-      </a-row>
+            <template v-else-if="column.key === 'total_revenue'">
+              <span v-if="record.latest_report?.total_revenue">
+                {{ formatWan(record.latest_report.total_revenue) }}
+              </span>
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="column.key === 'net_profit_parent'">
+              <span v-if="record.latest_report?.net_profit_parent"
+                :class="getProfitClass(record.latest_report.net_profit_parent)">
+                {{ formatWan(record.latest_report.net_profit_parent) }}
+              </span>
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="column.key === 'roe'">
+              <span v-if="record.latest_report?.roe != null"
+                :class="getRoeClass(record.latest_report.roe)">
+                {{ record.latest_report.roe?.toFixed(2) }}%
+              </span>
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="column.key === 'debt_ratio'">
+              <span v-if="record.latest_report?.debt_ratio != null">
+                {{ record.latest_report.debt_ratio?.toFixed(2) }}%
+              </span>
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="column.key === 'revenue_yoy'">
+              <span v-if="record.latest_report?.revenue_yoy != null"
+                :class="getYoyClass(record.latest_report.revenue_yoy)">
+                {{ record.latest_report.revenue_yoy?.toFixed(2) }}%
+              </span>
+              <span v-else>-</span>
+            </template>
+          </template>
+        </a-table>
+        <a-empty v-if="!loading && watchlist.length === 0" description="暂无自选股，请通过上方搜索添加">
+          <template #description>
+            <span>暂无自选股，请使用顶部搜索框搜索并添加股票</span>
+          </template>
+        </a-empty>
+      </a-spin>
+    </a-card>
+
+    <!-- 快速添加弹窗 -->
+    <a-modal
+      v-model:open="addModalVisible"
+      title="添加自选股"
+      @ok="confirmAdd"
+      :confirm-loading="addLoading"
+    >
+      <a-input-search
+        v-model:value="addKeyword"
+        placeholder="输入股票代码或名称"
+        size="large"
+        @search="searchToAdd"
+        @change="searchToAdd"
+        style="margin-bottom: 12px"
+      />
+      <div v-if="addSearchResults.length > 0" class="add-results">
+        <div
+          v-for="item in addSearchResults"
+          :key="item.stock_code"
+          class="add-result-item"
+          :class="{ selected: selectedToAdd?.stock_code === item.stock_code }"
+          @click="selectedToAdd = item"
+        >
+          <span class="code">{{ item.stock_code }}</span>
+          <span class="name">{{ item.stock_name }}</span>
+          <span v-if="item.industry" class="industry">{{ item.industry }}</span>
+        </div>
+      </div>
+      <a-empty v-if="addKeyword && addSearchResults.length === 0 && !addSearching" description="未找到股票" />
+    </a-modal>
+
+    <div class="fab-btn" @click="addModalVisible = true" title="添加自选股">
+      <PlusOutlined style="font-size: 24px; color: #fff" />
     </div>
-
-    <a-modal
-      v-model:open="addStockModalVisible"
-      title="添加股票"
-      @ok="handleAddStock"
-      :confirm-loading="addStockLoading"
-    >
-      <GlobalSearch @select="handleStockSelect" />
-      <a-divider />
-      <a-form :model="addStockForm" layout="vertical">
-        <a-form-item label="分组" name="group_name">
-          <a-select v-model:value="addStockForm.group_name" placeholder="选择分组">
-            <a-select-option v-for="group in groups" :key="group.group_name" :value="group.group_name">
-              {{ group.group_name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="备注" name="remark">
-          <a-input v-model:value="addStockForm.remark" placeholder="添加备注 (可选)" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
-    <a-modal
-      v-model:open="createGroupModalVisible"
-      title="新建分组"
-      @ok="handleCreateGroup"
-      :confirm-loading="createGroupLoading"
-    >
-      <a-form :model="newGroupForm" layout="vertical">
-        <a-form-item label="分组名称" name="group_name" :rules="[{ required: true, message: '请输入分组名称' }]">
-          <a-input v-model:value="newGroupForm.group_name" placeholder="输入分组名称" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, FolderOutlined } from '@ant-design/icons-vue'
-import GlobalSearch from '@/components/GlobalSearch.vue'
-import StockCard from '@/components/StockCard.vue'
-import { getWatchlistGroups, addToWatchlist, createGroup } from '@/api/watchlist'
-import type { WatchlistGroup, StockSearchItem } from '@/types'
+import { PlusOutlined, ReloadOutlined, CloudDownloadOutlined } from '@ant-design/icons-vue'
+import { watchlistApi, stockApi, collectorApi, type WatchlistItem, type SearchResult } from '@/api/finance'
 
+const router = useRouter()
 const loading = ref(false)
-const groups = ref<WatchlistGroup[]>([])
-const selectedGroup = ref<string | null>(null)
+const collecting = ref(false)
+const watchlist = ref<WatchlistItem[]>([])
 
-const addStockModalVisible = ref(false)
-const addStockLoading = ref(false)
-const selectedStock = ref<StockSearchItem | null>(null)
-const addStockForm = ref({
-  group_name: '',
-  remark: ''
-})
+const addModalVisible = ref(false)
+const addKeyword = ref('')
+const addSearching = ref(false)
+const addSearchResults = ref<SearchResult[]>([])
+const selectedToAdd = ref<SearchResult | null>(null)
+const addLoading = ref(false)
 
-const createGroupModalVisible = ref(false)
-const createGroupLoading = ref(false)
-const newGroupForm = ref({
-  group_name: ''
-})
+const columns = [
+  { title: '股票', key: 'stock_name', width: 180, fixed: 'left' as const },
+  { title: '最新报告期', key: 'latest_report', width: 120 },
+  { title: '营业总收入(万)', key: 'total_revenue', width: 150, align: 'right' as const },
+  { title: '归母净利润(万)', key: 'net_profit_parent', width: 150, align: 'right' as const },
+  { title: 'ROE(%)', key: 'roe', width: 100, align: 'right' as const },
+  { title: '资产负债率(%)', key: 'debt_ratio', width: 120, align: 'right' as const },
+  { title: '营收同比(%)', key: 'revenue_yoy', width: 120, align: 'right' as const },
+  { title: '操作', key: 'action', width: 80, align: 'center' as const, fixed: 'right' as const },
+]
 
-const totalStocks = computed(() => {
-  return groups.value.reduce((sum, g) => sum + g.stocks.length, 0)
-})
-
-const riskStats = computed(() => {
-  return { low: 0, medium: 0, high: 0 }
-})
-
-const currentStocks = computed(() => {
-  if (!selectedGroup.value) {
-    return groups.value.flatMap(g => g.stocks.map(s => ({
-      stock_code: s.stock_code,
-      stock_name: s.stock_name,
-      is_st: false,
-      industry: null,
-      market: null
-    })))
-  }
-  const group = groups.value.find(g => g.group_name === selectedGroup.value)
-  if (!group) return []
-  return group.stocks.map(s => ({
-    stock_code: s.stock_code,
-    stock_name: s.stock_name,
-    is_st: false,
-    industry: null,
-    market: null
-  }))
-})
-
-const loadGroups = async () => {
+async function loadWatchlist() {
   loading.value = true
   try {
-    const response = await getWatchlistGroups()
-    if (response.data.code === 200) {
-      groups.value = response.data.data || []
-      if (groups.value.length > 0 && !selectedGroup.value) {
-        selectedGroup.value = groups.value[0].group_name
-      }
+    const res = await watchlistApi.list()
+    if (res.code === 0) {
+      watchlist.value = res.data || []
     }
-  } catch (error) {
-    console.error('Failed to load groups:', error)
+  } catch (e) {
+    console.error(e)
+    message.error('加载自选股失败')
   } finally {
     loading.value = false
   }
 }
 
-const selectGroup = (groupName: string) => {
-  selectedGroup.value = groupName
+function formatWan(val: number) {
+  if (val == null) return '-'
+  if (Math.abs(val) >= 10000) {
+    return (val / 10000).toFixed(2) + '亿'
+  }
+  return val.toFixed(2) + '万'
 }
 
-const showAddStockModal = () => {
-  addStockModalVisible.value = true
-  selectedStock.value = null
-  addStockForm.value = { group_name: selectedGroup.value || '', remark: '' }
+function getProfitClass(val: number) {
+  return val >= 0 ? 'profit-pos' : 'profit-neg'
 }
 
-const handleStockSelect = (stockCode: string) => {
-  selectedStock.value = {
-    stock_code: stockCode,
-    stock_name: stockCode,
-    is_st: false,
-    industry: null,
-    market: null
-  }
+function getRoeClass(val: number) {
+  if (val >= 15) return 'roe-good'
+  if (val >= 8) return 'roe-ok'
+  return 'roe-bad'
 }
 
-const handleAddStock = async () => {
-  if (!selectedStock.value) {
-    message.warning('请先搜索选择股票')
-    return
-  }
-  if (!addStockForm.value.group_name) {
-    message.warning('请选择分组')
-    return
-  }
+function getYoyClass(val: number) {
+  return val >= 0 ? 'profit-pos' : 'profit-neg'
+}
 
-  addStockLoading.value = true
+function goToStock(code: string) {
+  router.push(`/stock/${code}/main-indicators`)
+}
+
+async function removeStock(record: WatchlistItem) {
   try {
-    await addToWatchlist({
-      stock_code: selectedStock.value.stock_code,
-      stock_name: selectedStock.value.stock_name,
-      group_name: addStockForm.value.group_name,
-      remark: addStockForm.value.remark
-    })
+    await watchlistApi.remove(record.stock_code)
+    message.success('已移除')
+    loadWatchlist()
+  } catch (e) {
+    message.error('移除失败')
+  }
+}
+
+async function refreshData() {
+  await loadWatchlist()
+  message.success('已刷新')
+}
+
+async function collectAll() {
+  collecting.value = true
+  try {
+    await collectorApi.triggerCollect('watchlist')
+    message.success('采集任务已启动，稍后刷新页面查看数据')
+  } catch (e) {
+    message.error('启动采集失败')
+  } finally {
+    collecting.value = false
+  }
+}
+
+let addSearchTimer: number | null = null
+async function searchToAdd() {
+  if (!addKeyword.value) {
+    addSearchResults.value = []
+    return
+  }
+  if (addSearchTimer) clearTimeout(addSearchTimer)
+  addSearchTimer = window.setTimeout(async () => {
+    addSearching.value = true
+    try {
+      const res = await stockApi.search(addKeyword.value)
+      if (res.code === 0) {
+        addSearchResults.value = res.data || []
+      }
+    } finally {
+      addSearching.value = false
+    }
+  }, 300)
+}
+
+async function confirmAdd() {
+  if (!selectedToAdd.value) {
+    message.warning('请先选择股票')
+    return
+  }
+  addLoading.value = true
+  try {
+    await watchlistApi.add(selectedToAdd.value.stock_code, selectedToAdd.value.stock_name)
     message.success('添加成功')
-    addStockModalVisible.value = false
-    loadGroups()
-  } catch (error) {
-    message.error('添加失败')
+    addModalVisible.value = false
+    addKeyword.value = ''
+    selectedToAdd.value = null
+    addSearchResults.value = []
+    loadWatchlist()
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '添加失败')
   } finally {
-    addStockLoading.value = false
-  }
-}
-
-const showCreateGroupModal = () => {
-  createGroupModalVisible.value = true
-  newGroupForm.value.group_name = ''
-}
-
-const handleCreateGroup = async () => {
-  if (!newGroupForm.value.group_name) {
-    message.warning('请输入分组名称')
-    return
-  }
-
-  createGroupLoading.value = true
-  try {
-    await createGroup({ group_name: newGroupForm.value.group_name })
-    message.success('创建成功')
-    createGroupModalVisible.value = false
-    loadGroups()
-  } catch (error) {
-    message.error('创建失败')
-  } finally {
-    createGroupLoading.value = false
+    addLoading.value = false
   }
 }
 
 onMounted(() => {
-  loadGroups()
+  loadWatchlist()
 })
 </script>
 
 <style scoped>
 .home-page {
-  padding: 16px;
+  min-height: calc(100vh - 96px);
 }
 
-.search-section {
-  margin-bottom: 24px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 12px;
-  color: #333;
-}
-
-.stats-section {
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  text-align: center;
-}
-
-.watchlist-section {
-  margin-bottom: 24px;
-}
-
-.group-list-card {
-  height: fit-content;
-}
-
-.stock-list-header {
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 16px;
 }
 
-.active-group {
-  background-color: #e6f7ff;
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.watchlist-card {
+  background: #fff;
+  border-radius: 8px;
+}
+
+.stock-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.stock-link:hover .stock-name-text {
+  color: #1d4ed8;
+}
+
+.stock-code {
+  font-size: 12px;
+  color: #999;
+}
+
+.stock-name-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.no-data {
+  color: #ccc;
+}
+
+.profit-pos {
+  color: #cf1322;
+}
+
+.profit-neg {
+  color: #389e0d;
+}
+
+.roe-good {
+  color: #cf1322;
+  font-weight: 600;
+}
+
+.roe-ok {
+  color: #d48806;
+}
+
+.roe-bad {
+  color: #389e0d;
+}
+
+.fab-btn {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.4);
+  transition: transform 0.2s;
+  z-index: 50;
+}
+
+.fab-btn:hover {
+  transform: scale(1.1);
+  background: #1e40af;
+}
+
+.add-results {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #f0f0f0;
   border-radius: 4px;
 }
 
-:deep(.ant-list-item) {
+.add-result-item {
+  padding: 10px 16px;
   cursor: pointer;
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #f5f5f5;
 }
 
-:deep(.ant-list-item:hover) {
-  background-color: #f5f5f5;
+.add-result-item:hover,
+.add-result-item.selected {
+  background: #e6f4ff;
+}
+
+.add-result-item .code {
+  color: #1d4ed8;
+  font-weight: 600;
+  min-width: 70px;
+}
+
+.add-result-item .industry {
+  font-size: 12px;
+  color: #999;
+  margin-left: auto;
 }
 </style>

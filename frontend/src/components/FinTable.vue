@@ -1,213 +1,294 @@
 <template>
-  <div class="fin-table">
-    <div class="table-controls">
-      <a-radio-group v-model:value="reportType" button-style="solid" @change="handleReportTypeChange">
-        <a-radio-button value="annual">年报</a-radio-button>
-        <a-radio-button value="quarter">季报</a-radio-button>
-        <a-radio-button value="all">全部</a-radio-button>
-      </a-radio-group>
-      <a-radio-group v-model:value="unit" button-style="solid">
-        <a-radio-button value="yuan">元</a-radio-button>
-        <a-radio-button value="ten-thousand">万元</a-radio-button>
-      </a-radio-group>
+  <div class="fin-table-wrapper">
+    <!-- 表头切换区域 -->
+    <div class="table-toolbar">
+      <div class="view-toggle">
+        <a-radio-group v-model:value="currentView" button-style="solid" size="small" @change="loadData">
+          <a-radio-button value="report">按报告期</a-radio-button>
+        </a-radio-group>
+      </div>
+      <div class="period-select">
+        <span class="period-label">显示期数：</span>
+        <a-select v-model:value="quarters" size="small" style="width: 100px" @change="loadData">
+          <a-select-option :value="4">4期</a-select-option>
+          <a-select-option :value="8">8期</a-select-option>
+          <a-select-option :value="12">12期</a-select-option>
+        </a-select>
+      </div>
     </div>
-    <a-table
-      :columns="columns"
-      :data-source="tableData"
-      :pagination="pagination"
-      :loading="loading"
-      :scroll="{ x: 'max-content' }"
-      @change="handleTableChange"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'report_date'">
-          <span class="mono-number">{{ record.report_date }}</span>
-        </template>
-        <template v-else-if="column.key === 'report_type'">
-          <a-tag :color="getReportTypeColor(record.report_type)">
-            {{ getReportTypeLabel(record.report_type) }}
-          </a-tag>
-        </template>
-        <template v-else-if="column.key === 'value'">
-          <span
-            class="mono-number"
-            :class="getValueClass(record.value)"
-          >
-            {{ formatValue(record.value) }}
-          </span>
-        </template>
-      </template>
-    </a-table>
+
+    <a-spin :spinning="loading">
+      <div class="fin-table-container">
+        <table class="fin-table">
+          <thead>
+            <tr>
+              <th class="fin-th col-name"></th>
+              <th
+                v-for="(date, idx) in reportDates"
+                :key="date"
+                class="fin-th col-date"
+              >
+                {{ formatDate(date) }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="(section, sIdx) in sections" :key="sIdx">
+              <tr class="section-header-row">
+                <td
+                  :colspan="reportDates.length + 1"
+                  class="section-header"
+                >
+                  {{ section.name }}
+                </td>
+              </tr>
+              <tr v-for="(item, iIdx) in section.items" :key="iIdx" class="data-row">
+                <td class="fin-td item-name" :title="item.name">{{ item.name }}</td>
+                <td
+                  v-for="(val, vIdx) in item.values"
+                  :key="vIdx"
+                  class="fin-td item-value"
+                  :class="getValueClass(item, val)"
+                >
+                  {{ formatValue(item.key, val) }}
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <a-empty v-if="!loading && reportDates.length === 0" description="暂无数据，请先采集该股票数据" style="padding: 60px 0" />
+      </div>
+    </a-spin>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 
-type TableType = 'balance' | 'income' | 'cashflow' | 'indicators'
+interface TableItem {
+  name: string
+  key: string
+  values: (number | null)[]
+}
+
+interface TableSection {
+  name: string
+  items: TableItem[]
+}
+
+interface TableResponse {
+  code: number
+  data: {
+    report_dates: string[]
+    sections: TableSection[]
+  }
+}
 
 const props = defineProps<{
-  type: TableType
+  fetchData: (code: string, view: string, quarters: number) => Promise<TableResponse>
   stockCode: string
 }>()
 
-const emit = defineEmits(['data-loaded'])
-
 const loading = ref(false)
-const reportType = ref('annual')
-const unit = ref('ten-thousand')
-const allData = ref<any[]>([])
-const pagination = ref({
-  current: 1,
-  pageSize: 10,
-  total: 0
-})
+const currentView = ref('report')
+const quarters = ref(8)
+const reportDates = ref<string[]>([])
+const sections = ref<TableSection[]>([])
 
-const columns = computed(() => {
-  const baseColumns = [
-    {
-      title: '报告日期',
-      dataIndex: 'report_date',
-      key: 'report_date',
-      width: 120,
-      sorter: (a: any, b: any) => a.report_date.localeCompare(b.report_date)
-    },
-    {
-      title: '报告类型',
-      dataIndex: 'report_type',
-      key: 'report_type',
-      width: 100
-    }
-  ]
-
-  if (props.type === 'indicators') {
-    return [
-      ...baseColumns,
-      { title: 'ROE', dataIndex: 'roe', key: 'roe', width: 100 },
-      { title: 'ROA', dataIndex: 'roa', key: 'roa', width: 100 },
-      { title: '毛利率', dataIndex: 'gross_margin', key: 'gross_margin', width: 100 },
-      { title: '净利率', dataIndex: 'net_margin', key: 'net_margin', width: 100 },
-      { title: '资产负债率', dataIndex: 'debt_to_assets', key: 'debt_to_assets', width: 120 },
-      { title: '流动比率', dataIndex: 'current_ratio', key: 'current_ratio', width: 100 },
-      { title: '速动比率', dataIndex: 'quick_ratio', key: 'quick_ratio', width: 100 }
-    ]
-  }
-
-  return [
-    ...baseColumns,
-    { title: '项目', dataIndex: 'item_name', key: 'item_name', width: 200 },
-    {
-      title: '金额',
-      dataIndex: 'value',
-      key: 'value',
-      width: 150,
-      sorter: (a: any, b: any) => (a.value || 0) - (b.value || 0)
-    },
-    { title: '单位', dataIndex: 'unit', key: 'unit', width: 80 }
-  ]
-})
-
-const tableData = computed(() => {
-  let filtered = allData.value
-
-  if (reportType.value !== 'all') {
-    filtered = filtered.filter((item: any) => {
-      if (reportType.value === 'annual') {
-        return item.report_type === '年报' || item.report_type === '年度'
-      }
-      return item.report_type !== '年报' && item.report_type !== '年度'
-    })
-  }
-
-  return filtered.map((item: any) => ({
-    ...item,
-    value: unit.value === 'ten-thousand' && item.value !== null
-      ? item.value / 10000
-      : item.value
-  }))
-})
-
-const handleTableChange = (pag: any) => {
-  pagination.value.current = pag.current
-  pagination.value.pageSize = pag.pageSize
-}
-
-const handleReportTypeChange = () => {
-  pagination.value.current = 1
-}
-
-const formatValue = (value: number | null): string => {
-  if (value === null || value === undefined) return '-'
-  return value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-const getValueClass = (value: number | null): string => {
-  if (value === null || value === undefined) return ''
-  return value >= 0 ? 'positive' : 'negative'
-}
-
-const getReportTypeColor = (type: string): string => {
-  if (type === '年报' || type === '年度') return 'blue'
-  if (type === '一季报' || type === 'Q1') return 'green'
-  if (type === '中报' || type === '半年报') return 'orange'
-  if (type === '三季报' || type === 'Q3') return 'purple'
-  return 'default'
-}
-
-const getReportTypeLabel = (type: string): string => {
-  return type
-}
-
-const loadData = async () => {
+async function loadData() {
   loading.value = true
   try {
-    const { getBalanceSheet, getIncomeStatement, getCashFlow, getIndicators } = await import('@/api/stock')
-    
-    let response
-    switch (props.type) {
-      case 'balance':
-        response = await getBalanceSheet(props.stockCode, { page: 1, page_size: 100 })
-        break
-      case 'income':
-        response = await getIncomeStatement(props.stockCode, { page: 1, page_size: 100 })
-        break
-      case 'cashflow':
-        response = await getCashFlow(props.stockCode, { page: 1, page_size: 100 })
-        break
-      case 'indicators':
-        response = await getIndicators(props.stockCode, { page: 1, page_size: 100 })
-        break
+    const res = await props.fetchData(props.stockCode, currentView.value, quarters.value)
+    if (res.code === 0 && res.data) {
+      reportDates.value = res.data.report_dates || []
+      sections.value = res.data.sections || []
+    } else {
+      reportDates.value = []
+      sections.value = []
     }
-
-    if (response.data.code === 200) {
-      allData.value = response.data.data.items || []
-      pagination.value.total = allData.value.length
-      emit('data-loaded', allData.value)
-    }
-  } catch (error) {
-    console.error('Failed to load table data:', error)
+  } catch (e) {
+    console.error(e)
+    reportDates.value = []
+    sections.value = []
   } finally {
     loading.value = false
   }
 }
 
-watch(() => props.stockCode, () => {
-  loadData()
-})
+function formatDate(dateStr: string) {
+  if (!dateStr) return ''
+  return dateStr.slice(0, 10)
+}
 
-onMounted(() => {
-  loadData()
-})
+function formatValue(key: string, val: number | null): string {
+  if (val === null || val === undefined) return '-'
+  const lowerKey = key.toLowerCase()
+  // 比率类（%）字段
+  if (lowerKey.includes('ratio') || lowerKey.includes('rate') || lowerKey.includes('roe') ||
+      lowerKey.includes('roa') || lowerKey.includes('margin') || lowerKey.includes('yoy') ||
+      lowerKey.includes('qoq') || lowerKey.includes('percent') || key.endsWith('_ratio')) {
+    return val.toFixed(2) + '%'
+  }
+  // 每股指标（EPS/BPS等），单位元，保留4位
+  if (lowerKey.includes('eps') || lowerKey.includes('bps') || lowerKey.includes('_ps') || key === 'BASIC_EPS' || key === 'DILUTED_EPS') {
+    return val.toFixed(4)
+  }
+  // 金额类字段：自动转换为万/亿
+  const absVal = Math.abs(val)
+  if (absVal >= 1e8) {
+    return (val / 1e8).toFixed(2) + '亿'
+  } else if (absVal >= 1e4) {
+    return (val / 1e4).toFixed(2) + '万'
+  }
+  // 流动比率/速动比率等
+  if (lowerKey.includes('current') || lowerKey.includes('quick')) {
+    return val.toFixed(2)
+  }
+  return val.toFixed(2)
+}
+
+function getValueClass(item: TableItem, val: number | null) {
+  if (val === null) return ''
+  const key = item.key.toLowerCase()
+  // 同比增长率
+  if (key.includes('yoy') || key.includes('qoq') || key.includes('growth')) {
+    return val >= 0 ? 'val-up' : 'val-down'
+  }
+  // ROE 等盈利指标
+  if (key.includes('roe') || key.includes('roa')) {
+    if (val >= 15) return 'val-good'
+    if (val >= 8) return 'val-ok'
+    return val >= 0 ? 'val-weak' : 'val-down'
+  }
+  // 利润类
+  if (key.includes('profit') || key.includes('income') || key.includes('revenue')) {
+    if (key.endsWith('_yoy') || key.endsWith('_growth')) return val >= 0 ? 'val-up' : 'val-down'
+    return val >= 0 ? '' : 'val-down'
+  }
+  return ''
+}
+
+watch(() => props.stockCode, () => {
+  if (props.stockCode) {
+    loadData()
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>
-.fin-table {
+.fin-table-wrapper {
   width: 100%;
 }
 
-.table-controls {
+.table-toolbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.period-label {
+  font-size: 13px;
+  color: #666;
+}
+
+.fin-table-container {
+  overflow-x: auto;
+}
+
+.fin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fin-th {
+  background: #fafafa;
+  padding: 10px 12px;
+  text-align: right;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #e8e8e8;
+  white-space: nowrap;
+}
+
+.fin-th:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  min-width: 220px;
+  max-width: 300px;
+  background: #fafafa;
+}
+
+.col-date {
+  min-width: 110px;
+}
+
+.section-header-row td {
+  padding: 0;
+}
+
+.section-header {
+  background: linear-gradient(to right, #f0f7ff, #fff);
+  color: #1d4ed8;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e6f4ff;
+}
+
+.data-row:hover td {
+  background: #f8fafc;
+}
+
+.fin-td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #f5f5f5;
+  text-align: right;
+  color: #333;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-td.item-name {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #fff;
+  color: #555;
+  z-index: 5;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.data-row:hover .fin-td.item-name {
+  background: #f8fafc;
+}
+
+.val-up {
+  color: #cf1322;
+}
+
+.val-down {
+  color: #389e0d;
+}
+
+.val-good {
+  color: #cf1322;
+  font-weight: 600;
+}
+
+.val-ok {
+  color: #d48806;
+}
+
+.val-weak {
+  color: #8c8c8c;
 }
 </style>

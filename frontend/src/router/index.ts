@@ -10,7 +10,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
-    component: () => import('@/layout/BasicLayout.vue'),
+    component: () => import('@/layout/MainLayout.vue'),
     meta: { requiresAuth: true },
     children: [
       {
@@ -21,23 +21,36 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'stock/:code',
         name: 'StockDetail',
-        component: () => import('@/views/StockDetail.vue')
+        component: () => import('@/views/StockDetail.vue'),
+        redirect: to => `/stock/${to.params.code}/main-indicators`,
+        children: [
+          {
+            path: 'main-indicators',
+            name: 'MainIndicators',
+            component: () => import('@/views/finance/MainIndicators.vue')
+          },
+          {
+            path: 'balance-sheet',
+            name: 'BalanceSheet',
+            component: () => import('@/views/finance/BalanceSheet.vue')
+          },
+          {
+            path: 'income-statement',
+            name: 'IncomeStatement',
+            component: () => import('@/views/finance/IncomeStatement.vue')
+          },
+          {
+            path: 'cash-flow',
+            name: 'CashFlow',
+            component: () => import('@/views/finance/CashFlow.vue')
+          },
+          {
+            path: 'announcements',
+            name: 'Announcements',
+            component: () => import('@/views/finance/Announcements.vue')
+          },
+        ]
       },
-      {
-        path: 'compare',
-        name: 'Compare',
-        component: () => import('@/views/Compare.vue')
-      },
-      {
-        path: 'risk',
-        name: 'RiskCenter',
-        component: () => import('@/views/RiskCenter.vue')
-      },
-      {
-        path: 'announcement',
-        name: 'Announcement',
-        component: () => import('@/views/Announcement.vue')
-      }
     ]
   },
   {
@@ -55,7 +68,6 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
-
   if (requiresAuth && !authStore.token) {
     next('/login')
   } else if (to.path === '/login' && authStore.token) {

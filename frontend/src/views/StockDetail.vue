@@ -1,326 +1,301 @@
 <template>
-  <div class="stock-detail-page">
-    <a-spin :spinning="loading">
-      <div class="stock-header">
-        <div class="stock-title">
-          <h1>{{ stockName }}</h1>
-          <a-tag v-if="isST" color="red">ST</a-tag>
-          <span class="stock-code mono-number">{{ stockCode }}</span>
+  <div class="stock-detail">
+    <!-- 股票头部信息栏（类似东财F10蓝色头部） -->
+    <div class="stock-header">
+      <div class="stock-header-inner">
+        <div class="stock-title-area" v-if="stockInfo">
+          <div class="stock-code-badge">
+            <span class="market-tag">{{ stockInfo.market }}</span>
+            <span class="stock-code">{{ stockInfo.stock_code }}</span>
+          </div>
+          <h1 class="stock-name">{{ stockInfo.stock_name }}</h1>
+          <span v-if="stockInfo.industry" class="stock-industry">{{ stockInfo.industry }}</span>
+          <button class="watchlist-btn" @click="toggleWatchlist">
+            <StarOutlined v-if="isInWatchlist" style="color: #f59e0b" />
+            <StarOutlined v-else />
+            {{ isInWatchlist ? '已自选' : '加自选' }}
+          </button>
         </div>
-        <div class="stock-info">
-          <span>{{ industry || '未知行业' }}</span>
-          <span>{{ market || '未知市场' }}</span>
-        </div>
+        <a-spin v-else size="small" />
       </div>
 
-      <a-tabs v-model:activeKey="activeTab">
-        <a-tab-pane key="overview" tab="财务总览">
-          <div class="overview-section">
-            <a-row :gutter="[16, 16]">
-              <a-col :span="4">
-                <a-card class="metric-card">
-                  <a-statistic
-                    title="ROE (净资产收益率)"
-                    :value="overview?.latest_annual?.roe"
-                    :precision="2"
-                    suffix="%"
-                    :value-style="{ color: getValueColor(overview?.latest_annual?.roe) }"
-                  />
-                </a-card>
-              </a-col>
-              <a-col :span="4">
-                <a-card class="metric-card">
-                  <a-statistic
-                    title="ROA (资产收益率)"
-                    :value="overview?.latest_annual?.roa"
-                    :precision="2"
-                    suffix="%"
-                    :value-style="{ color: getValueColor(overview?.latest_annual?.roa) }"
-                  />
-                </a-card>
-              </a-col>
-              <a-col :span="4">
-                <a-card class="metric-card">
-                  <a-statistic
-                    title="毛利率"
-                    :value="overview?.latest_annual?.gross_margin"
-                    :precision="2"
-                    suffix="%"
-                  />
-                </a-card>
-              </a-col>
-              <a-col :span="4">
-                <a-card class="metric-card">
-                  <a-statistic
-                    title="资产负债率"
-                    :value="overview?.latest_annual?.debt_to_assets"
-                    :precision="2"
-                    suffix="%"
-                  />
-                </a-card>
-              </a-col>
-              <a-col :span="4">
-                <a-card class="metric-card">
-                  <a-statistic
-                    title="营收"
-                    :value="formatRevenue(overview?.latest_annual?.revenue)"
-                    :value-style="{ fontSize: '18px' }"
-                  />
-                </a-card>
-              </a-col>
-              <a-col :span="4">
-                <a-card class="metric-card">
-                  <a-statistic
-                    title="净利润"
-                    :value="formatRevenue(overview?.latest_annual?.net_profit)"
-                    :value-style="{ fontSize: '18px' }"
-                  />
-                </a-card>
-              </a-col>
-            </a-row>
-            <a-card class="chart-card" title="指标趋势">
-              <IndicatorChart :indicators="indicators" :stock-name="stockName" />
-            </a-card>
-          </div>
-        </a-tab-pane>
+      <!-- 一级Tab导航（类似东财：操盘必读/财务分析/公告...） -->
+      <div class="nav-tabs">
+        <div class="nav-tabs-inner">
+          <router-link
+            v-for="tab in mainTabs"
+            :key="tab.path"
+            :to="tab.path"
+            class="nav-tab"
+            :class="{ active: isTabActive(tab.path) }"
+          >
+            {{ tab.name }}
+          </router-link>
+        </div>
+      </div>
+    </div>
 
-        <a-tab-pane key="balance" tab="资产负债表">
-          <FinTable type="balance" :stock-code="stockCode" />
-        </a-tab-pane>
+    <!-- 财务分析二级导航 -->
+    <div v-if="isFinanceTab" class="sub-nav">
+      <div class="sub-nav-inner">
+        <router-link
+          v-for="tab in financeSubTabs"
+          :key="tab.path"
+          :to="tab.path"
+          class="sub-nav-tab"
+          :class="{ active: route.path.startsWith(tab.path) }"
+        >
+          {{ tab.name }}
+        </router-link>
+      </div>
+    </div>
 
-        <a-tab-pane key="income" tab="利润表">
-          <FinTable type="income" :stock-code="stockCode" />
-        </a-tab-pane>
-
-        <a-tab-pane key="cashflow" tab="现金流量表">
-          <FinTable type="cashflow" :stock-code="stockCode" />
-        </a-tab-pane>
-
-        <a-tab-pane key="indicators" tab="财务指标">
-          <FinTable type="indicators" :stock-code="stockCode" />
-        </a-tab-pane>
-
-        <a-tab-pane key="risk" tab="风险评估">
-          <div class="risk-section">
-            <a-card class="risk-summary">
-              <a-row>
-                <a-col :span="12">
-                  <a-statistic
-                    title="风险等级"
-                    :value="riskAssessment?.risk_level || '未知'"
-                    :value-style="{ color: getRiskColor(riskAssessment?.risk_level) }"
-                  />
-                </a-col>
-                <a-col :span="12">
-                  <a-statistic
-                    title="总分"
-                    :value="riskAssessment?.total_score || 0"
-                    suffix="分"
-                  />
-                </a-col>
-              </a-row>
-            </a-card>
-            <a-card title="风险规则检测" class="risk-rules">
-              <a-list
-                :data-source="riskAssessment?.rules || []"
-                :loading="riskLoading"
-              >
-                <template #renderItem="{ item }">
-                  <a-list-item>
-                    <a-list-item-meta>
-                      <template #avatar>
-                        <a-badge
-                          :status="item.passed ? 'success' : 'error'"
-                          :text="item.passed ? '通过' : '未通过'"
-                        />
-                      </template>
-                      <template #title>
-                        {{ item.rule_name }}
-                      </template>
-                      <template #description>
-                        {{ item.detail }}
-                      </template>
-                    </a-list-item-meta>
-                    <template #actions>
-                      <span class="rule-score" :class="{ positive: item.passed, negative: !item.passed }">
-                        {{ item.passed ? '+' : '' }}{{ item.score }}分
-                      </span>
-                    </template>
-                  </a-list-item>
-                </template>
-              </a-list>
-            </a-card>
-          </div>
-        </a-tab-pane>
-      </a-tabs>
-    </a-spin>
+    <!-- 子页面内容 -->
+    <div class="detail-content">
+      <router-view v-slot="{ Component }">
+        <a-spin :spinning="pageLoading">
+          <component :is="Component" :stock-code="stockCode" :stock-info="stockInfo" />
+        </a-spin>
+      </router-view>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import FinTable from '@/components/FinTable.vue'
-import IndicatorChart from '@/components/IndicatorChart.vue'
-import { getStockOverview, getIndicators, getRiskAssessment } from '@/api/stock'
-import type { StockOverview, FinIndicator, RiskAssessment } from '@/types'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import { StarOutlined } from '@ant-design/icons-vue'
+import { stockApi, watchlistApi, type StockInfo } from '@/api/finance'
 
 const route = useRoute()
-const stockCode = computed(() => route.params.code as string)
+const router = useRouter()
+const stockCode = computed(() => (route.params.code as string))
+const stockInfo = ref<StockInfo | null>(null)
+const pageLoading = ref(false)
+const isInWatchlist = ref(false)
 
-const loading = ref(false)
-const riskLoading = ref(false)
-const activeTab = ref('overview')
-const stockName = ref('')
-const isST = ref(false)
-const industry = ref<string | null>(null)
-const market = ref<string | null>(null)
-const overview = ref<StockOverview | null>(null)
-const indicators = ref<FinIndicator[]>([])
-const riskAssessment = ref<RiskAssessment | null>(null)
+const mainTabs = [
+  { name: '主要指标', path: `/stock/${stockCode.value}/main-indicators` },
+  { name: '资产负债表', path: `/stock/${stockCode.value}/balance-sheet` },
+  { name: '利润表', path: `/stock/${stockCode.value}/income-statement` },
+  { name: '现金流量表', path: `/stock/${stockCode.value}/cash-flow` },
+  { name: '公司公告', path: `/stock/${stockCode.value}/announcements` },
+]
 
-const loadOverview = async () => {
-  loading.value = true
+const financeSubTabs = computed(() => [
+  { name: '主要指标', path: `/stock/${stockCode.value}/main-indicators` },
+  { name: '资产负债表', path: `/stock/${stockCode.value}/balance-sheet` },
+  { name: '利润表', path: `/stock/${stockCode.value}/income-statement` },
+  { name: '现金流量表', path: `/stock/${stockCode.value}/cash-flow` },
+  { name: '公司公告', path: `/stock/${stockCode.value}/announcements` },
+])
+
+const isFinanceTab = computed(() => route.path.includes('/stock/'))
+
+function isTabActive(path: string) {
+  if (path.endsWith('/main-indicators')) return route.path.endsWith('/main-indicators')
+  return route.path.startsWith(path)
+}
+
+async function loadStockInfo() {
+  if (!stockCode.value) return
+  pageLoading.value = true
   try {
-    const response = await getStockOverview(stockCode.value)
-    if (response.data.code === 200) {
-      overview.value = response.data.data
-      stockName.value = response.data.data.basic.stock_name
-      isST.value = response.data.data.basic.is_st
-      industry.value = response.data.data.basic.industry
-      market.value = response.data.data.basic.market
+    const res = await stockApi.getInfo(stockCode.value)
+    if (res.code === 0) {
+      stockInfo.value = res.data
+      // 更新tab路径
+      mainTabs.forEach((tab, i) => {
+        const basePath = ['main-indicators', 'balance-sheet', 'income-statement', 'cash-flow', 'announcements'][i]
+        tab.path = `/stock/${stockCode.value}/${basePath}`
+      })
     }
-  } catch (error) {
-    console.error('Failed to load overview:', error)
+  } catch (e) {
+    console.error(e)
   } finally {
-    loading.value = false
+    pageLoading.value = false
   }
 }
 
-const loadIndicators = async () => {
+async function checkWatchlist() {
   try {
-    const response = await getIndicators(stockCode.value, { page: 1, page_size: 100 })
-    if (response.data.code === 200) {
-      indicators.value = response.data.data.items || []
+    const res = await watchlistApi.list()
+    if (res.code === 0) {
+      isInWatchlist.value = (res.data || []).some(s => s.stock_code === stockCode.value)
     }
-  } catch (error) {
-    console.error('Failed to load indicators:', error)
+  } catch (e) {
+    console.error(e)
   }
 }
 
-const loadRiskAssessment = async () => {
-  riskLoading.value = true
+async function toggleWatchlist() {
   try {
-    const response = await getRiskAssessment(stockCode.value)
-    if (response.data.code === 200) {
-      riskAssessment.value = response.data.data
+    if (isInWatchlist.value) {
+      await watchlistApi.remove(stockCode.value)
+      message.success('已从自选移除')
+      isInWatchlist.value = false
+    } else {
+      await watchlistApi.add(stockCode.value, stockInfo.value?.stock_name)
+      message.success('已添加到自选')
+      isInWatchlist.value = true
     }
-  } catch (error) {
-    console.error('Failed to load risk assessment:', error)
-  } finally {
-    riskLoading.value = false
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '操作失败')
   }
 }
 
-const formatRevenue = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '-'
-  if (Math.abs(value) >= 1e8) {
-    return (value / 1e8).toFixed(2) + ' 亿'
-  }
-  return value.toFixed(2)
-}
-
-const getValueColor = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '#333'
-  return value >= 0 ? '#52c41a' : '#ff4d4f'
-}
-
-const getRiskColor = (level: string | undefined): string => {
-  if (!level) return '#999'
-  switch (level) {
-    case 'low': return '#52c41a'
-    case 'medium': return '#faad14'
-    case 'high': return '#ff7a45'
-    case 'very_high': return '#ff4d4f'
-    case 'excluded': return '#8c8c8c'
-    default: return '#999'
-  }
-}
+watch(stockCode, () => {
+  loadStockInfo()
+  checkWatchlist()
+})
 
 onMounted(() => {
-  loadOverview()
-  loadIndicators()
-  loadRiskAssessment()
+  loadStockInfo()
+  checkWatchlist()
 })
 </script>
 
 <style scoped>
-.stock-detail-page {
-  padding: 16px;
+.stock-detail {
+  min-height: calc(100vh - 96px);
 }
 
 .stock-header {
-  margin-bottom: 24px;
+  background: #fff;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: 0;
 }
 
-.stock-title {
+.stock-header-inner {
+  padding: 20px 24px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stock-title-area {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.stock-title h1 {
-  margin: 0;
-  font-size: 24px;
+.stock-code-badge {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  gap: 6px;
+}
+
+.market-tag {
+  font-size: 11px;
+  opacity: 0.8;
+  font-weight: 500;
 }
 
 .stock-code {
-  color: #999;
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
-.stock-info {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
+.stock-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.stock-industry {
+  font-size: 13px;
   color: #666;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-.overview-section {
-  padding: 0;
-}
-
-.metric-card {
-  text-align: center;
-}
-
-.chart-card {
-  margin-top: 16px;
-}
-
-.risk-section {
+.watchlist-btn {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #666;
+  margin-left: 16px;
 }
 
-.risk-summary {
+.watchlist-btn:hover {
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+}
+
+.nav-tabs {
+  border-top: 1px solid #f0f0f0;
+}
+
+.nav-tabs-inner {
+  display: flex;
+  padding: 0 24px;
+}
+
+.nav-tab {
+  padding: 12px 20px;
+  font-size: 14px;
+  color: #666;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.nav-tab:hover {
+  color: #1d4ed8;
+}
+
+.nav-tab.active {
+  color: #1d4ed8;
+  font-weight: 600;
+  border-bottom-color: #1d4ed8;
+}
+
+.sub-nav {
   background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.risk-rules {
-  margin-top: 16px;
+.sub-nav-inner {
+  display: flex;
+  padding: 0 24px;
 }
 
-.rule-score {
+.sub-nav-tab {
+  padding: 10px 24px;
+  font-size: 13px;
+  color: #666;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sub-nav-tab:hover {
+  color: #1d4ed8;
+}
+
+.sub-nav-tab.active {
+  color: #1d4ed8;
   font-weight: 600;
 }
 
-.rule-score.positive {
-  color: #52c41a;
-}
-
-.rule-score.negative {
-  color: #ff4d4f;
+.detail-content {
+  background: #fff;
+  padding: 20px 24px;
+  min-height: 400px;
+  border-radius: 0 0 8px 8px;
 }
 </style>
