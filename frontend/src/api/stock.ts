@@ -46,6 +46,10 @@ export const getFinancialQuarter = (code: string, period: string) => {
   ])
 }
 
+export const getBatchQuote = (codes: string[]) => {
+  return get<ApiResponse<any[]>>('/api/v1/stocks/batch-quote', { codes: codes.join(',') })
+}
+
 export const getRiskAssessment = (code: string, params?: { report_date?: string }) => {
   return get<ApiResponse<any>>(`/api/v1/stocks/${code}/risk-assessment`, params)
 }

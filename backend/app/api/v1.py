@@ -12,6 +12,7 @@ from app.core.exceptions import NotFoundError
 from app.db import get_db
 from app.models import (
     StockBasic, BalanceSheet, IncomeStatement, CashFlow, FinIndicator,
+    StockRealtimeQuote,
 )
 
 
@@ -227,7 +228,7 @@ def get_indicators(
 
 @router.get("/stocks/{stock_code}/overview")
 def get_overview(stock_code: str, db: Session = Depends(get_db)):
-    """公司基础信息 + 最新年报关键指标。"""
+    """公司基础信息 + 最新年报关键指标 + 实时估值(PE/PB/市值/涨跌幅)。"""
     basic = db.query(StockBasic).filter(StockBasic.stock_code == stock_code).first()
     if basic is None:
         raise NotFoundError(f"未找到股票: {stock_code}")
@@ -252,20 +253,128 @@ def get_overview(stock_code: str, db: Session = Depends(get_db)):
         .first()
     )
 
+    # 实时行情(最新一日)
+    latest_quote = (
+        db.query(StockRealtimeQuote)
+        .filter(StockRealtimeQuote.stock_code == stock_code)
+        .order_by(StockRealtimeQuote.quote_date.desc())
+        .first()
+    )
+
+    def _d(v):
+        return str(v) if v is not None else None
+
     return ok({
         "basic": {
             "stock_code": basic.stock_code,
             "stock_name": basic.stock_name,
+            "full_name": basic.full_name,
             "industry": basic.industry,
             "market": basic.market,
+            "list_date": basic.list_date.isoformat() if basic.list_date else None,
+            "total_share": _d(basic.total_share),
+            "float_share": _d(basic.float_share),
+        },
+        # 估值(实时)
+        "valuation": {
+            "quote_date": latest_quote.quote_date.isoformat() if latest_quote else None,
+            "latest_price": _d(latest_quote.latest_price) if latest_quote else None,
+            "change_pct": _d(latest_quote.change_pct) if latest_quote else None,
+            "change_amount": _d(latest_quote.change_amount) if latest_quote else None,
+            "pe": _d(latest_quote.pe_dynamic) if latest_quote else None,
+            "pe_ttm": _d(latest_quote.pe_ttm) if latest_quote else None,
+            "pb": _d(latest_quote.pb) if latest_quote else None,
+            "ps_ttm": _d(latest_quote.ps_ttm) if latest_quote else None,
+            "total_market_cap": _d(latest_quote.total_market_cap) if latest_quote else None,
+            "float_market_cap": _d(latest_quote.float_market_cap) if latest_quote else None,
         },
         "latest_annual": {
             "report_date": latest.report_date.isoformat() if latest else None,
-            "roe": str(latest.roe) if latest and latest.roe else None,
-            "roa": str(latest.roa) if latest and latest.roa else None,
-            "debt_to_assets": str(latest.debt_to_assets) if latest and latest.debt_to_assets else None,
-            "total_revenue": str(latest_income.total_revenue) if latest_income and latest_income.total_revenue else None,
-            "net_profit_parent": str(latest_income.net_profit_parent) if latest_income and latest_income.net_profit_parent else None,
-            "total_assets": str(latest_balance.total_assets) if latest_balance and latest_balance.total_assets else None,
+            "roe": _d(latest.roe) if latest else None,
+            "roa": _d(latest.roa) if latest else None,
+            "net_margin": _d(latest.net_margin) if latest else None,
+            "debt_to_assets": _d(latest.debt_to_assets) if latest else None,
+            "gross_margin": _d(latest_income.gross_margin) if latest_income else None,
+            "revenue_yoy": _d(latest.revenue_yoy) if latest else None,
+            "net_profit_yoy": _d(latest.net_profit_yoy) if latest else None,
+            "current_ratio": _d(latest.current_ratio) if latest else None,
+            "inventory_turnover": _d(latest.inventory_turnover) if latest else None,
+            "ar_turnover": _d(latest.ar_turnover) if latest else None,
+            "total_revenue": _d(latest_income.total_revenue) if latest_income else None,
+            "net_profit_parent": _d(latest_income.net_profit_parent) if latest_income else None,
+            "total_assets": _d(latest_balance.total_assets) if latest_balance else None,
+            "total_equity": _d(latest_balance.total_equity) if latest_balance else None,
         },
+    })
+
+
+@router.get("/stocks/batch-quote")
+def get_batch_quote(codes: str, db: Session = Depends(get_db)):
+    """批量获取多只股票最新行情, 一次返回。
+
+    codes 形如: 600879.SH,000001.SZ,300136.SZ
+    """
+    code_list = [c.strip() for c in codes.split(",") if c.strip()]
+    if not code_list:
+        return ok([])
+    # 用 IN + 排序, 再按 stock_code 聚合
+    rows = (
+        db.query(StockRealtimeQuote)
+        .filter(StockRealtimeQuote.stock_code.in_(code_list))
+        .order_by(StockRealtimeQuote.stock_code, StockRealtimeQuote.quote_date.desc())
+        .all()
+    )
+    seen: set[str] = set()
+    result = []
+    for q in rows:
+        if q.stock_code in seen:
+            continue
+        seen.add(q.stock_code)
+        result.append({
+            "stock_code": q.stock_code,
+            "quote_date": q.quote_date.isoformat() if q.quote_date else None,
+            "latest_price": str(q.latest_price) if q.latest_price else None,
+            "open_price": str(q.open_price) if q.open_price else None,
+            "high_price": str(q.high_price) if q.high_price else None,
+            "low_price": str(q.low_price) if q.low_price else None,
+            "pre_close": str(q.pre_close) if q.pre_close else None,
+            "change_pct": str(q.change_pct) if q.change_pct else None,
+            "change_amount": str(q.change_amount) if q.change_amount else None,
+            "volume": str(q.volume) if q.volume else None,
+            "turnover": str(q.turnover) if q.turnover else None,
+            "pe": str(q.pe_dynamic) if q.pe_dynamic else None,
+            "pb": str(q.pb) if q.pb else None,
+        })
+    return ok(result)
+
+
+@router.get("/stocks/{stock_code}/quote")
+def get_quote(stock_code: str, db: Session = Depends(get_db)):
+    """单只股票最新行情快照。"""
+    q = (
+        db.query(StockRealtimeQuote)
+        .filter(StockRealtimeQuote.stock_code == stock_code)
+        .order_by(StockRealtimeQuote.quote_date.desc())
+        .first()
+    )
+    if q is None:
+        raise NotFoundError(f"未找到行情: {stock_code}")
+    return ok({
+        "stock_code": q.stock_code,
+        "quote_date": q.quote_date.isoformat(),
+        "latest_price": str(q.latest_price) if q.latest_price else None,
+        "open_price": str(q.open_price) if q.open_price else None,
+        "high_price": str(q.high_price) if q.high_price else None,
+        "low_price": str(q.low_price) if q.low_price else None,
+        "pre_close": str(q.pre_close) if q.pre_close else None,
+        "change_pct": str(q.change_pct) if q.change_pct else None,
+        "change_amount": str(q.change_amount) if q.change_amount else None,
+        "volume": str(q.volume) if q.volume else None,
+        "turnover": str(q.turnover) if q.turnover else None,
+        "pe": str(q.pe_dynamic) if q.pe_dynamic else None,
+        "pe_ttm": str(q.pe_ttm) if q.pe_ttm else None,
+        "pb": str(q.pb) if q.pb else None,
+        "ps_ttm": str(q.ps_ttm) if q.ps_ttm else None,
+        "total_market_cap": str(q.total_market_cap) if q.total_market_cap else None,
+        "float_market_cap": str(q.float_market_cap) if q.float_market_cap else None,
     })

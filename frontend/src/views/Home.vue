@@ -62,7 +62,15 @@
                     <span class="mini-name">{{ stock.stock_name }}</span>
                     <a-tag v-if="stock.is_st" color="red" size="small">ST</a-tag>
                   </div>
-                  <div class="mini-code">{{ stock.stock_code }}</div>
+                  <div class="mini-code">{{ stock.stock_code }}<span v-if="stock.industry" class="mini-industry">{{ stock.industry }}</span></div>
+                  <div class="mini-quote" v-if="stock.quote">
+                    <span class="mini-price" :class="priceClass(stock.quote.change_pct)">{{ stock.quote.latest_price || '-' }}</span>
+                    <span class="mini-change" :class="priceClass(stock.quote.change_pct)">
+                      {{ Number(stock.quote.change_amount || 0) >= 0 ? '+' : '' }}{{ stock.quote.change_amount || '0' }}
+                      ({{ Number(stock.quote.change_pct || 0) >= 0 ? '+' : '' }}{{ stock.quote.change_pct || '0' }}%)
+                    </span>
+                  </div>
+                  <div class="mini-no-quote" v-else>暂无行情</div>
                 </a-card>
               </a-col>
               <a-col v-if="displayStocks.length === 0 && !loading" :span="24">
@@ -144,6 +152,7 @@ import { message } from 'ant-design-vue'
 import GlobalSearch from '@/components/GlobalSearch.vue'
 import { getWatchlistGroups, addToWatchlist as addStock, createGroup } from '@/api/watchlist'
 import { getAnnouncements } from '@/api/announcement'
+import { getBatchQuote, getStockBasic } from '@/api/stock'
 
 const router = useRouter()
 const route = useRoute()
@@ -158,18 +167,28 @@ const addForm = ref({ group_name: '', new_group_name: '' })
 
 const annLoading = ref(false)
 const recentAnnouncements = ref<any[]>([])
+const quoteMap = ref<Record<string, any>>({})
+const basicMap = ref<Record<string, any>>({})
 
 const totalStocks = computed(() => groups.value.reduce((s, g) => s + g.stocks.length, 0))
 const riskStocks = computed(() => 0)
 
 const displayStocks = computed(() => {
-  if (selectedGroup.value) {
-    const g = groups.value.find(x => x.group_name === selectedGroup.value)
-    return g ? g.stocks.map((s: any) => ({ stock_code: s.stock_code, stock_name: s.stock_name, is_st: false })) : []
-  }
-  return groups.value.flatMap((g: any) =>
-    g.stocks.map((s: any) => ({ stock_code: s.stock_code, stock_name: s.stock_name, is_st: false }))
-  )
+  const list: any[] = []
+  groups.value.forEach((g: any) => {
+    g.stocks.forEach((s: any) => {
+      if (selectedGroup.value && g.group_name !== selectedGroup.value) return
+      const code = s.stock_code
+      list.push({
+        stock_code: code,
+        stock_name: s.stock_name,
+        industry: basicMap.value[code]?.industry || '',
+        is_st: false,
+        quote: quoteMap.value[code] || null,
+      })
+    })
+  })
+  return list
 })
 
 const loadGroups = async () => {
@@ -178,11 +197,38 @@ const loadGroups = async () => {
     const res = await getWatchlistGroups()
     if (res.data.code === 200) {
       groups.value = res.data.data.groups || []
+      await loadQuotesAndBasics()
     }
   } catch (e) {
     console.error(e)
   } finally {
     loading.value = false
+  }
+}
+
+const loadQuotesAndBasics = async () => {
+  const codes: string[] = []
+  groups.value.forEach((g: any) => g.stocks.forEach((s: any) => codes.push(s.stock_code)))
+  const uniq = [...new Set(codes)]
+  if (uniq.length === 0) return
+  try {
+    // 行情
+    const qRes = await getBatchQuote(uniq)
+    if (qRes.data.code === 200) {
+      quoteMap.value = {}
+      ;(qRes.data.data || []).forEach((q: any) => {
+        quoteMap.value[q.stock_code] = q
+      })
+    }
+    // 行业（并发）
+    const basics = await Promise.all(uniq.map(c => getStockBasic(c).catch(() => null)))
+    basics.forEach((r: any) => {
+      if (r && r.data?.code === 200 && r.data.data) {
+        basicMap.value[r.data.data.stock_code] = r.data.data
+      }
+    })
+  } catch (e) {
+    console.error(e)
   }
 }
 
@@ -206,6 +252,11 @@ const goDetail = (code: string) => {
 
 const goAnnouncement = (item: any) => {
   router.push({ path: '/announcement', query: { stock: item.stock_code } })
+}
+
+const priceClass = (p: any) => {
+  const n = Number(p || 0)
+  return n > 0 ? 'price-up' : n < 0 ? 'price-down' : ''
 }
 
 const handleStockSelect = (item: { stock_code: string; stock_name: string }) => {
@@ -306,6 +357,41 @@ onMounted(() => {
   font-family: 'SF Mono', Consolas, monospace;
   margin-top: 4px;
 }
+
+.mini-industry {
+  margin-left: 8px;
+  color: #1890ff;
+  background: #e6f7ff;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.mini-quote {
+  margin-top: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.mini-price {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.mini-change {
+  font-size: 12px;
+}
+
+.mini-no-quote {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #bbb;
+}
+
+.price-up { color: #cf1322; }
+.price-down { color: #389e0d; }
 
 .ann-item {
   cursor: pointer;

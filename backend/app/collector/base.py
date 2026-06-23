@@ -1,14 +1,53 @@
 """采集适配器基类 —— 提供重试/随机延时/熔断/日志。
 
 所有数据采集适配器继承 BaseCollector，调用 self._fetch() 实现实际抓取逻辑。
+
+注意: AkShare 内部用 requests.Session 默认 User-Agent 经常被东财/Wind 服务器拒绝。
+本模块在 import 时替换默认 session 的 headers (全局生效)。
 """
 import random
 import time
 from datetime import datetime
 from typing import Any
 
+import requests
+
 from app.core.config import settings
 from app.core.logger import get_logger
+
+
+# 全局 requests session 注入 EM 友好的 headers
+def _install_em_headers():
+    """为所有 requests 调用注入浏览器风格的 headers, 避免被 EM/Wind 反爬拒绝。"""
+    try:
+        from requests import Session
+        original_init = Session.__init__
+
+        def patched_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            self.headers.update({
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/126.0.0.0 Safari/537.36"
+                ),
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                    "image/avif,image/webp,*/*;q=0.8"
+                ),
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Referer": "https://quote.eastmoney.com/",
+                "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": '"macOS"',
+            })
+
+        Session.__init__ = patched_init
+    except Exception:  # noqa: BLE001
+        pass
+
+
+_install_em_headers()
 
 
 class FetchError(Exception):

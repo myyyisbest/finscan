@@ -41,19 +41,24 @@ def list_announcements(
         .limit(page_size)
         .all()
     )
-    items = [
-        {
+    def _to_item(r):
+        # Sina 采集时, pdf_url 是占位键 "sina:detail_id", content_summary 存真实 URL
+        if r.pdf_url and r.pdf_url.startswith("sina:"):
+            real_url = r.content_summary  # 真实 PDF / 详情页
+        else:
+            real_url = r.pdf_url
+        return {
             "id": r.id,
             "stock_code": r.stock_code,
             "ann_title": r.ann_title,
             "ann_type": r.ann_type,
             "publish_date": r.publish_date.isoformat() if r.publish_date else None,
             "is_risk": r.is_risk,
-            "pdf_url": r.pdf_url,
-            "content_summary": r.content_summary,
+            "pdf_url": real_url,
+            "source": r.source,
         }
-        for r in rows
-    ]
+
+    items = [_to_item(r) for r in rows]
     from app.core.response import PageData
     return ok(PageData.build(items, total, page, page_size))
 
@@ -63,11 +68,15 @@ def get_announcement(ann_id: int, db: Session = Depends(get_db)):
     r = db.get(Announcement, ann_id)
     if r is None:
         return {"code": 2001, "message": "公告不存在"}
+    if r.pdf_url and r.pdf_url.startswith("sina:"):
+        real_url = r.content_summary
+    else:
+        real_url = r.pdf_url
     return ok({
         "id": r.id, "stock_code": r.stock_code, "ann_title": r.ann_title,
         "ann_type": r.ann_type,
         "publish_date": r.publish_date.isoformat() if r.publish_date else None,
-        "pdf_url": r.pdf_url, "content_summary": r.content_summary,
+        "pdf_url": real_url, "content_summary": r.content_summary,
         "is_risk": r.is_risk, "source": r.source,
     })
 

@@ -46,7 +46,45 @@ class StockBasic(Base):
     market: Mapped[str | None] = mapped_column(String(20), comment="主板/创业板/科创板/北交所")
     list_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_st: Mapped[bool] = mapped_column(Boolean, default=False)
-    sina_code: Mapped[str | None] = mapped_column(String(15), comment="新浪接口代码 sh600519")
+    # EM 东方财富代码: 1.600879 / 0.300136
+    em_code: Mapped[str | None] = mapped_column(String(15), comment="EM 代码 1.600879")
+    # 股本(EM)
+    total_share: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="总股本(股)")
+    float_share: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="流通股本(股)")
+    update_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class StockRealtimeQuote(Base):
+    """实时行情快照 —— EM 东方财富提供 PE/PB/市值/涨跌幅。
+
+    按 (stock_code, quote_date) 唯一键 upsert。
+    """
+    __tablename__ = "stock_realtime_quote"
+    __table_args__ = (
+        UniqueConstraint("stock_code", "quote_date", name="uk_quote_stock_date"),
+        Index("ix_quote_date", "quote_date"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stock_code: Mapped[str] = mapped_column(String(10), index=True)
+    quote_date: Mapped[date] = mapped_column(Date, comment="行情日期")
+    # 价格
+    latest_price: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="最新价")
+    open_price: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True)
+    high_price: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True)
+    low_price: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True)
+    pre_close: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True)
+    change_pct: Mapped[Decimal | None] = mapped_column(DECIMAL(10, 4), nullable=True, comment="涨跌幅%")
+    change_amount: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="涨跌额")
+    volume: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="成交量(手)")
+    turnover: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="成交额(元)")
+    # 估值
+    pe_dynamic: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="动态市盈率")
+    pe_ttm: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="TTM 市盈率")
+    pb: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="市净率")
+    ps_ttm: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 4), nullable=True, comment="市销率")
+    # 市值
+    total_market_cap: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="总市值(元)")
+    float_market_cap: Mapped[Decimal | None] = mapped_column(DECIMAL(20, 4), nullable=True, comment="流通市值(元)")
     update_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 

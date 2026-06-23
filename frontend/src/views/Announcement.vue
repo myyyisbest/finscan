@@ -27,17 +27,26 @@
         <a-select
           v-model:value="filterType"
           placeholder="公告类型"
-          style="width: 140px"
+          style="width: 160px"
           allow-clear
           @change="loadAnnouncements"
         >
           <a-select-option value="年度报告">年度报告</a-select-option>
           <a-select-option value="半年度报告">半年度报告</a-select-option>
-          <a-select-option value="季度报告">季度报告</a-select-option>
+          <a-select-option value="一季度报告">一季度报告</a-select-option>
+          <a-select-option value="三季度报告">三季度报告</a-select-option>
           <a-select-option value="上市公告">上市公告</a-select-option>
           <a-select-option value="发行公告">发行公告</a-select-option>
+          <a-select-option value="业绩预告">业绩预告</a-select-option>
+          <a-select-option value="分红派息">分红派息</a-select-option>
+          <a-select-option value="股东大会">股东大会</a-select-option>
+          <a-select-option value="重大事项">重大事项</a-select-option>
+          <a-select-option value="风险提示">风险提示</a-select-option>
+          <a-select-option value="其他">其他</a-select-option>
         </a-select>
+        <a-checkbox v-model:checked="filterRisk" @change="loadAnnouncements">仅看风险</a-checkbox>
         <a-button type="primary" @click="loadAnnouncements">查询</a-button>
+        <a-button @click="resetFilter">重置</a-button>
       </div>
 
       <a-spin :spinning="loading">
@@ -115,6 +124,7 @@ const list = ref<any[]>([])
 const keyword = ref('')
 const filterStock = ref<string | undefined>()
 const filterType = ref<string | undefined>()
+const filterRisk = ref(false)
 const stockOptions = ref<any[]>([])
 const detailVisible = ref(false)
 const currentAnn = ref<any | null>(null)
@@ -136,10 +146,18 @@ const columns = [
 ]
 
 const getTypeColor = (type: string) => {
-  if (type?.includes('年报')) return 'blue'
-  if (type?.includes('半年')) return 'cyan'
-  if (type?.includes('季报')) return 'green'
-  if (type?.includes('发行') || type?.includes('上市')) return 'purple'
+  if (!type) return 'default'
+  if (type.includes('年报') || type.includes('年度报告')) return 'blue'
+  if (type.includes('半年')) return 'cyan'
+  if (type.includes('一季') || type.includes('Q1')) return 'green'
+  if (type.includes('三季') || type.includes('Q3')) return 'lime'
+  if (type.includes('发行') || type.includes('上市')) return 'purple'
+  if (type.includes('业绩')) return 'magenta'
+  if (type.includes('分红') || type.includes('派息')) return 'gold'
+  if (type.includes('股东大会')) return 'volcano'
+  if (type.includes('重大')) return 'red'
+  if (type.includes('风险')) return 'red'
+  if (type.includes('监管')) return 'orange'
   return 'default'
 }
 
@@ -150,6 +168,7 @@ const loadAnnouncements = async () => {
       keyword: keyword.value || undefined,
       stock_code: filterStock.value,
       ann_type: filterType.value,
+      is_risk: filterRisk.value ? true : undefined,
       page: pagination.value.current || 1,
       page_size: pagination.value.pageSize || 20,
     })
@@ -188,6 +207,15 @@ const handleTableChange = (pag: TablePaginationConfig) => {
 const showDetail = (record: any) => {
   currentAnn.value = record
   detailVisible.value = true
+}
+
+const resetFilter = () => {
+  keyword.value = ''
+  filterStock.value = undefined
+  filterType.value = undefined
+  filterRisk.value = false
+  pagination.value.current = 1
+  loadAnnouncements()
 }
 
 onMounted(() => {
