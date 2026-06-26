@@ -191,7 +191,7 @@ BS_GROUPS = [
         "name": "流动资产",
         "fields": [
             ("货币资金", ["MONETARYFUNDS"]),
-            ("交易性金融资产", ["FVTPL_FINASSET", "TRADE_FINANCIAL_ASSET"]),
+            ("交易性金融资产", ["TRADE_FINASSET_NOTFVTPL", "TRADE_FINASSET", "FVTPL_FINASSET", "TRADE_FINANCIAL_ASSET"]),
             ("应收票据", ["NOTE_RECE", "BILL_RECE"]),
             ("应收账款", ["ACCOUNTS_RECE"]),
             ("应收票据及应收账款", ["NOTE_ACCOUNTS_RECE", "ACCOUNTS_RECE", "NOTE_RECE"]),
@@ -478,13 +478,18 @@ def _em_value(raw: dict, key: str, is_eps: bool = False):
     v = raw.get(key)
     if v is None:
         return None
+    # 处理 nan/inf 值
+    if isinstance(v, float) and (v != v or v == float('inf') or v == float('-inf')):
+        return None
     if isinstance(v, (int, float)):
         return float(v) if not is_eps else round(float(v), 4)
     s = str(v).strip().replace(",", "")
-    if s in ("", "--", "-", "nan", "None"):
+    if s in ("", "--", "-", "nan", "NaN", "None"):
         return None
     try:
         fv = float(s)
+        if fv != fv or fv == float('inf') or fv == float('-inf'):
+            return None
         return fv if not is_eps else round(fv, 4)
     except (ValueError, TypeError):
         return None
