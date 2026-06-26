@@ -158,11 +158,12 @@ const loadAnnouncements = async () => {
       params.is_risk = filterRisk.value
     }
 
-    const response = await get<any>('/api/v1/announcements', params)
+    // axios interceptor already unwraps response.data
+    const res = await get<any>('/api/v1/announcements', params)
 
-    if (response.data.code === 200) {
-      announcements.value = response.data.data.items || []
-      pagination.value.total = response.data.data.total || 0
+    if (res.code === 0) {
+      announcements.value = res.data.items || []
+      pagination.value.total = res.data.total || 0
     }
   } catch (error) {
     console.error('Failed to load announcements:', error)

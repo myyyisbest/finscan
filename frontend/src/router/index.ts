@@ -19,6 +19,21 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Home.vue')
       },
       {
+        path: 'finscan',
+        name: 'Finscan',
+        component: () => import('@/views/Finscan.vue')
+      },
+      {
+        path: 'announcements',
+        name: 'Announcements',
+        component: () => import('@/views/Announcement.vue')
+      },
+      {
+        path: 'compare',
+        name: 'Compare',
+        component: () => import('@/views/Compare.vue')
+      },
+      {
         path: 'stock/:code',
         name: 'StockDetail',
         component: () => import('@/views/StockDetail.vue'),

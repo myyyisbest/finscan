@@ -19,7 +19,7 @@
             @input="onSearchInput"
             @focus="showSearchResult = true"
           />
-          <button class="search-btn" @click="handleSearch">搜索</button>
+          <button class="search-btn" @click="handleSearch">🔍</button>
           <div v-if="showSearchResult && searchResults.length > 0" class="search-result">
             <div
               v-for="item in searchResults"
@@ -42,12 +42,37 @@
       </div>
     </header>
 
-    <!-- 主内容区 -->
-    <main class="main-content">
-      <router-view v-slot="{ Component }">
-        <component :is="Component" />
-      </router-view>
-    </main>
+    <!-- 主体区域 -->
+    <div class="body-area">
+      <!-- 左侧导航 -->
+      <aside class="sidebar">
+        <nav class="nav-menu">
+          <router-link to="/" class="nav-item" :class="{ active: route.path === '/' }">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">我的自选</span>
+          </router-link>
+          <router-link to="/finscan" class="nav-item" :class="{ active: route.path === '/finscan' }">
+            <span class="nav-icon">⚠️</span>
+            <span class="nav-text">财报排雷</span>
+          </router-link>
+          <router-link to="/announcements" class="nav-item" :class="{ active: route.path.startsWith('/announcements') }">
+            <span class="nav-icon">📰</span>
+            <span class="nav-text">公告中心</span>
+          </router-link>
+          <router-link to="/compare" class="nav-item" :class="{ active: route.path === '/compare' }">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">多标对比</span>
+          </router-link>
+        </nav>
+      </aside>
+
+      <!-- 主内容区 -->
+      <main class="main-content">
+        <router-view v-slot="{ Component }">
+          <component :is="Component" />
+        </router-view>
+      </main>
+    </div>
   </div>
 </template>
 
@@ -134,7 +159,7 @@ function handleLogout() {
 }
 
 .top-bar-inner {
-  max-width: 1400px;
+  max-width: 1600px;
   width: 100%;
   margin: 0 auto;
   padding: 0 24px;
@@ -165,7 +190,7 @@ function handleLogout() {
   position: relative;
   display: flex;
   align-items: center;
-  width: 420px;
+  width: 360px;
 }
 
 .search-input {
@@ -181,14 +206,13 @@ function handleLogout() {
 
 .search-btn {
   height: 36px;
-  padding: 0 20px;
+  width: 40px;
   border: none;
   background: #f59e0b;
   color: #fff;
-  font-size: 14px;
+  font-size: 16px;
   border-radius: 0 4px 4px 0;
   cursor: pointer;
-  font-weight: 500;
 }
 
 .search-btn:hover {
@@ -199,7 +223,7 @@ function handleLogout() {
   position: absolute;
   top: 40px;
   left: 0;
-  right: 68px;
+  right: 40px;
   background: #fff;
   border-radius: 0 0 4px 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -264,9 +288,60 @@ function handleLogout() {
   background: rgba(255, 255, 255, 0.25);
 }
 
-.main-content {
-  max-width: 1400px;
+/* 主体区域 */
+.body-area {
+  display: flex;
+  max-width: 1600px;
   margin: 0 auto;
+  min-height: calc(100vh - 56px);
+}
+
+/* 左侧导航 */
+.sidebar {
+  width: 200px;
+  background: #fff;
+  border-right: 1px solid #e8e8e8;
+  padding: 16px 0;
+  flex-shrink: 0;
+}
+
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: #333;
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.nav-item:hover {
+  background: #f0f7ff;
+  color: #1d4ed8;
+}
+
+.nav-item.active {
+  background: #e6f0ff;
+  color: #1d4ed8;
+  border-left-color: #1d4ed8;
+  font-weight: 600;
+}
+
+.nav-icon {
+  font-size: 18px;
+}
+
+/* 主内容区 */
+.main-content {
+  flex: 1;
   padding: 20px 24px;
+  min-width: 0;
 }
 </style>

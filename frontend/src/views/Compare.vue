@@ -130,9 +130,10 @@ const loadCompareData = async () => {
         const overviewRes = await getStockOverview(stock.stock_code)
         const indicatorsRes = await getIndicators(stock.stock_code, { page: 1, page_size: 1 })
 
-        const overview = overviewRes.data.code === 200 ? overviewRes.data.data : null
-        const indicator = indicatorsRes.data.code === 200 && indicatorsRes.data.data.items.length > 0
-          ? indicatorsRes.data.data.items[0]
+        // axios interceptor already unwraps response.data, so we access directly
+        const overview = overviewRes.code === 0 ? overviewRes.data : null
+        const indicator = indicatorsRes.code === 0 && indicatorsRes.data.items.length > 0
+          ? indicatorsRes.data.items[0]
           : null
 
         return {
