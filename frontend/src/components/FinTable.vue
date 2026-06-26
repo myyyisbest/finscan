@@ -88,6 +88,7 @@ interface TableResponse {
 const props = defineProps<{
   fetchData: (code: string, view: string, quarters: number) => Promise<TableResponse>
   stockCode: string
+  highlightTotals?: boolean
 }>()
 
 const loading = ref(false)
@@ -178,7 +179,14 @@ function getValueClass(item: TableItem, val: number | null) {
 }
 
 function isTotalRow(name: string): boolean {
-  return name.includes('合计') || name.includes('总计') || name.includes('小计')
+  if (!props.highlightTotals) return false
+  const totalItems = [
+    '流动资产合计', '非流动资产合计',
+    '流动负债合计', '非流动负债合计',
+    '资产总计', '负债合计',
+    '股东权益合计', '负债和股东权益合计',
+  ]
+  return totalItems.includes(name)
 }
 
 watch(() => props.stockCode, () => {

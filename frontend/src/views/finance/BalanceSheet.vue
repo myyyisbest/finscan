@@ -1,5 +1,5 @@
 <template>
-  <FinTable :fetch-data="financeApi.getBalanceSheet" :stock-code="stockCode" />
+  <FinTable :fetch-data="financeApi.getBalanceSheet" :stock-code="stockCode" :highlight-totals="true" />
 </template>
 
 <script setup lang="ts">
