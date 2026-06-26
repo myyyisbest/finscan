@@ -1,14 +1,12 @@
 """东方财富 EM Web 数据采集器。
 
-使用东方财富 F10 页面内部 API 获取财务数据：
-- 主要指标: https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew
-- 利润表: https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_DMSK_FN_INCOME
-- 资产负债表: https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_DMSK_FN_BALANCE
-- 现金流量表: https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_DMSK_FN_CASHFLOW
+使用东方财富接口获取财务数据：
+- 主要指标: https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew (F10主要指标页)
+- 三表数据: 使用 akshare 调用东方财富完整接口（300+字段）
 
 特点：
-- 数据源稳定（东方财富官方接口）
-- 字段完整（主要指标约140+字段）
+- 主要指标约140+字段
+- 三表数据300+字段（资产负债表/利润表/现金流量表）
 - 请求频率可控
 """
 import time
@@ -137,83 +135,56 @@ def collect_main_indicators(code: str, secucode: str = None) -> list[dict]:
     return []
 
 
-def collect_income_statement(code: str) -> list[dict]:
-    """采集利润表"""
-    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
-    params = {
-        "reportName": "RPT_DMSK_FN_INCOME",
-        "columns": "ALL",
-        "filter": f'(SECURITY_CODE="{code}")',
-        "pageNumber": 1,
-        "pageSize": 100,
-        "sortTypes": -1,
-        "sortColumns": "REPORT_DATE",
-    }
+def collect_income_statement(code: str, secucode: str = None) -> list[dict]:
+    """采集利润表（使用akshare获取完整数据）"""
+    if secucode is None:
+        secucode = _get_secucode(code)
 
-    for attempt in range(3):
-        try:
-            resp = requests.get(url, params=params, headers=HEADERS, timeout=15)
-            data = resp.json()
-            if data.get("result") and data["result"].get("data"):
-                log.info("[%s] 利润表: %d 期", code, len(data["result"]["data"]))
-                return data["result"]["data"]
-        except Exception as e:
-            log.warning("[%s] 利润表采集失败(第%d次): %s", code, attempt + 1, e)
-            time.sleep(2)
+    try:
+        import akshare as ak
+        df = ak.stock_profit_sheet_by_report_em(symbol=secucode)
+        if df is not None and len(df) > 0:
+            data = df.to_dict("records")
+            log.info("[%s] 利润表: %d 期", code, len(data))
+            return data
+    except Exception as e:
+        log.warning("[%s] 利润表采集失败: %s", code, e)
 
     return []
 
 
-def collect_balance_sheet(code: str) -> list[dict]:
-    """采集资产负债表"""
-    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
-    params = {
-        "reportName": "RPT_DMSK_FN_BALANCE",
-        "columns": "ALL",
-        "filter": f'(SECURITY_CODE="{code}")',
-        "pageNumber": 1,
-        "pageSize": 100,
-        "sortTypes": -1,
-        "sortColumns": "REPORT_DATE",
-    }
+def collect_balance_sheet(code: str, secucode: str = None) -> list[dict]:
+    """采集资产负债表（使用akshare获取完整数据）"""
+    if secucode is None:
+        secucode = _get_secucode(code)
 
-    for attempt in range(3):
-        try:
-            resp = requests.get(url, params=params, headers=HEADERS, timeout=15)
-            data = resp.json()
-            if data.get("result") and data["result"].get("data"):
-                log.info("[%s] 资产负债表: %d 期", code, len(data["result"]["data"]))
-                return data["result"]["data"]
-        except Exception as e:
-            log.warning("[%s] 资产负债表采集失败(第%d次): %s", code, attempt + 1, e)
-            time.sleep(2)
+    try:
+        import akshare as ak
+        df = ak.stock_balance_sheet_by_report_em(symbol=secucode)
+        if df is not None and len(df) > 0:
+            data = df.to_dict("records")
+            log.info("[%s] 资产负债表: %d 期", code, len(data))
+            return data
+    except Exception as e:
+        log.warning("[%s] 资产负债表采集失败: %s", code, e)
 
     return []
 
 
-def collect_cash_flow(code: str) -> list[dict]:
-    """采集现金流量表"""
-    url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
-    params = {
-        "reportName": "RPT_DMSK_FN_CASHFLOW",
-        "columns": "ALL",
-        "filter": f'(SECURITY_CODE="{code}")',
-        "pageNumber": 1,
-        "pageSize": 100,
-        "sortTypes": -1,
-        "sortColumns": "REPORT_DATE",
-    }
+def collect_cash_flow(code: str, secucode: str = None) -> list[dict]:
+    """采集现金流量表（使用akshare获取完整数据）"""
+    if secucode is None:
+        secucode = _get_secucode(code)
 
-    for attempt in range(3):
-        try:
-            resp = requests.get(url, params=params, headers=HEADERS, timeout=15)
-            data = resp.json()
-            if data.get("result") and data["result"].get("data"):
-                log.info("[%s] 现金流量表: %d 期", code, len(data["result"]["data"]))
-                return data["result"]["data"]
-        except Exception as e:
-            log.warning("[%s] 现金流量表采集失败(第%d次): %s", code, attempt + 1, e)
-            time.sleep(2)
+    try:
+        import akshare as ak
+        df = ak.stock_cash_flow_sheet_by_report_em(symbol=secucode)
+        if df is not None and len(df) > 0:
+            data = df.to_dict("records")
+            log.info("[%s] 现金流量表: %d 期", code, len(data))
+            return data
+    except Exception as e:
+        log.warning("[%s] 现金流量表采集失败: %s", code, e)
 
     return []
 
@@ -268,26 +239,22 @@ def save_fin_reports(db: Session, code: str, income_list: list[dict],
     from app.models import FinReport
 
     # 按报告期索引数据
-    income_map = {}
-    for item in income_list:
-        date_str = item.get("REPORT_DATE", "")
-        if isinstance(date_str, str) and len(date_str) >= 10:
-            key = date_str[:10]
-            income_map[key] = item
+    def build_map(data_list):
+        m = {}
+        for item in data_list:
+            date_str = item.get("REPORT_DATE", "")
+            if isinstance(date_str, str) and len(date_str) >= 10:
+                key = date_str[:10]
+            elif hasattr(date_str, "strftime"):
+                key = date_str.strftime("%Y-%m-%d")
+            else:
+                continue
+            m[key] = item
+        return m
 
-    balance_map = {}
-    for item in balance_list:
-        date_str = item.get("REPORT_DATE", "")
-        if isinstance(date_str, str) and len(date_str) >= 10:
-            key = date_str[:10]
-            balance_map[key] = item
-
-    cashflow_map = {}
-    for item in cashflow_list:
-        date_str = item.get("REPORT_DATE", "")
-        if isinstance(date_str, str) and len(date_str) >= 10:
-            key = date_str[:10]
-            cashflow_map[key] = item
+    income_map = build_map(income_list)
+    balance_map = build_map(balance_list)
+    cashflow_map = build_map(cashflow_list)
 
     count = 0
     all_dates = set(list(income_map.keys()) + list(balance_map.keys()) + list(cashflow_map.keys()))
@@ -301,14 +268,14 @@ def save_fin_reports(db: Session, code: str, income_list: list[dict],
 
             # 确定报告期名称
             report_name = income.get("REPORT_DATE_NAME") or balance.get("REPORT_DATE_NAME") or date_key
-            report_type_raw = income.get("REPORT_TYPE_CODE") or balance.get("REPORT_TYPE_CODE") or ""
-            if report_type_raw == "001":
+            report_type_raw = income.get("REPORT_TYPE") or balance.get("REPORT_TYPE") or ""
+            if "一季" in str(report_type_raw) or "Q1" in str(report_type_raw):
                 report_type = "Q1"
-            elif report_type_raw == "002":
+            elif "中报" in str(report_type_raw) or "半年" in str(report_type_raw):
                 report_type = "H1"
-            elif report_type_raw == "003":
+            elif "三季" in str(report_type_raw) or "Q3" in str(report_type_raw):
                 report_type = "Q3"
-            elif report_type_raw == "004":
+            elif "年报" in str(report_type_raw) or "年度" in str(report_type_raw):
                 report_type = "Annual"
             else:
                 report_type = "Annual"
@@ -318,6 +285,8 @@ def save_fin_reports(db: Session, code: str, income_list: list[dict],
             notice_date = None
             if isinstance(notice_date_str, str) and len(notice_date_str) >= 10:
                 notice_date = datetime.strptime(notice_date_str[:10], "%Y-%m-%d").date()
+            elif hasattr(notice_date_str, "strftime"):
+                notice_date = notice_date_str.date() if hasattr(notice_date_str, "date") else notice_date_str
 
             existing = db.query(FinReport).filter_by(
                 stock_code=code,
@@ -325,7 +294,6 @@ def save_fin_reports(db: Session, code: str, income_list: list[dict],
             ).first()
 
             if existing:
-                # 更新
                 existing.report_name = report_name
                 existing.report_type = report_type
                 existing.notice_date = notice_date
@@ -393,11 +361,11 @@ def collect_stock_all_data(code: str, stock_name: str = None) -> dict:
             result["main_indicators"] = save_main_indicators(db, code, main_data)
 
     # 3. 采集三表数据
-    income_data = collect_income_statement(code)
+    income_data = collect_income_statement(code, secucode)
     time.sleep(0.5)
-    balance_data = collect_balance_sheet(code)
+    balance_data = collect_balance_sheet(code, secucode)
     time.sleep(0.5)
-    cashflow_data = collect_cash_flow(code)
+    cashflow_data = collect_cash_flow(code, secucode)
 
     if income_data or balance_data or cashflow_data:
         with db_session() as db:
