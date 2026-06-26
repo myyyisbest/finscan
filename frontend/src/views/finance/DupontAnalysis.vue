@@ -24,7 +24,7 @@
     </div>
 
     <a-spin :spinning="loading">
-      <div v-if="!loading && nodes.length" class="dupont-tree">
+      <div v-if="!loading && displayNodes.length" class="dupont-tree">
         <div class="tree-canvas" :style="`transform: scale(${zoom})`">
           <!-- 顶层 ROE -->
           <div class="node-root">
@@ -100,23 +100,23 @@
               </span>
             </div>
             <div class="detail-chart">
-              <div class="chart-title">近{{ selectedNode.history.length }}期趋势</div>
+              <div class="chart-title">近{{ chartHistory.length }}期趋势</div>
               <div class="chart-bars">
                 <div
-                  v-for="(v, i) in selectedNode.history"
+                  v-for="(v, i) in chartHistory"
                   :key="i"
                   class="bar-item"
                 >
                   <div class="bar-wrapper">
                     <div
                       class="bar-fill"
-                      :style="getBarStyle(v, selectedNode.history, selectedNode.is_pct)"
-                      :title="`${v !== null ? formatVal(v) : '-'}${selectedNode.unit}`"
+                      :style="getBarStyle(v, chartHistory, selectedNode?.is_pct)"
+                      :title="`${v !== null ? formatVal(v) : '-'}${selectedNode?.unit || ''}`"
                     >
                       <span class="bar-value">{{ v !== null ? formatVal(v) : '-' }}</span>
                     </div>
                   </div>
-                  <div class="bar-label">{{ formatPeriod(reportNames[i]) }}</div>
+                  <div class="bar-label">{{ formatPeriod(chartLabels[i]) }}</div>
                 </div>
               </div>
             </div>
@@ -147,15 +147,66 @@ const props = defineProps<{
 }>()
 
 const loading = ref(false)
-const nodes = ref<DupontNode[]>([])
+const rawNodes = ref<DupontNode[]>([])
 const reportDates = ref<string[]>([])
 const reportNames = ref<string[]>([])
 const currentReportIdx = ref(0)
 const expandedNodes = ref<Set<string>>(new Set(['roe']))
-const selectedNode = ref<DupontNode | null>(null)
+const selectedKey = ref<string>('roe')
 const zoom = ref(1)
 
-const roeNode = computed(() => nodes.value[0])
+function getNodeAtIdx(nodes: DupontNode[], idx: number): DupontNode[] {
+  return nodes.map((node) => {
+    const hist = node.history || []
+    const n = hist.length
+    const valIdx = n - 1 - idx
+    const currentVal = valIdx >= 0 && valIdx < n ? hist[valIdx] : null
+    let yoy: number | null = null
+    if (valIdx >= 1 && hist[valIdx - 1] !== null && hist[valIdx - 1] !== 0 && hist[valIdx] !== null) {
+      yoy = round2((hist[valIdx] - hist[valIdx - 1]) / Math.abs(hist[valIdx - 1]) * 100)
+    }
+    const children = node.children ? getNodeAtIdx(node.children, idx) : []
+    return {
+      ...node,
+      value: currentVal,
+      yoy,
+      children,
+    }
+  })
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100
+}
+
+const displayNodes = computed(() => {
+  if (!rawNodes.value.length) return []
+  return getNodeAtIdx(rawNodes.value, currentReportIdx.value)
+})
+
+const roeNode = computed(() => displayNodes.value[0])
+
+const selectedNode = computed(() => {
+  const found = findNode(displayNodes.value, selectedKey.value)
+  return found || displayNodes.value[0] || null
+})
+
+const chartHistory = computed(() => {
+  const node = selectedNode.value
+  if (!node || !node.history) return []
+  const hist = node.history
+  const n = hist.length
+  const endIdx = n - currentReportIdx.value
+  return hist.slice(0, endIdx)
+})
+
+const chartLabels = computed(() => {
+  if (!reportNames.value.length) return []
+  const names = [...reportNames.value].reverse()
+  const n = names.length
+  const endIdx = n - currentReportIdx.value
+  return names.slice(0, endIdx)
+})
 
 const currentReportName = computed(() => {
   if (!reportNames.value.length) return ''
@@ -168,14 +219,12 @@ const canNext = computed(() => currentReportIdx.value > 0)
 function prevReport() {
   if (canPrev.value) {
     currentReportIdx.value++
-    loadData()
   }
 }
 
 function nextReport() {
   if (canNext.value) {
     currentReportIdx.value--
-    loadData()
   }
 }
 
@@ -192,9 +241,7 @@ function toggleNode(key: string) {
       return
     }
   }
-  // 选中节点显示详情
-  const found = findNode(nodes.value, key)
-  selectedNode.value = found
+  selectedKey.value = key
 }
 
 function findNode(list: DupontNode[], key: string): DupontNode | null {
@@ -243,20 +290,13 @@ async function loadData() {
   if (!props.stockCode) return
   loading.value = true
   try {
-    const res = await financeApi.getDupont(props.stockCode, 6)
-    if (res.data.code === 0) {
-      nodes.value = res.data.data.nodes || []
-      reportDates.value = res.data.data.report_dates || []
-      reportNames.value = res.data.data.report_names || []
-      // 默认选中第一层
-      const roe = nodes.value[0]
-      if (roe) {
-        selectedNode.value = roe
-        // 自动展开第二层
-        if (roe.children?.length) {
-          expandedNodes.value = new Set([roe.key])
-        }
-      }
+    const res = await financeApi.getDupont(props.stockCode, 8)
+    if (res.code === 0 && res.data) {
+      rawNodes.value = res.data.nodes || []
+      reportDates.value = res.data.report_dates || []
+      reportNames.value = res.data.report_names || []
+      selectedKey.value = 'roe'
+      expandedNodes.value = new Set(['roe'])
     }
   } finally {
     loading.value = false

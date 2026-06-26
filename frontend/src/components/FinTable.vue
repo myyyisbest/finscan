@@ -79,12 +79,13 @@ interface TableResponse {
   code: number
   data: {
     report_dates: string[]
+    report_names?: string[]
     sections: TableSection[]
   }
 }
 
 const props = defineProps<{
-  fetchData: (code: string, view: string, quarters: number) => Promise<TableResponse>
+  fetchData: (code: string, view: string, quarters: number, reportType?: string) => Promise<TableResponse>
   stockCode: string
   highlightTotals?: boolean
 }>()
@@ -100,8 +101,10 @@ const allReportDates = ref<string[]>([])
 const allReportNames = ref<string[]>([])
 const reportDates = ref<string[]>([])
 const sections = ref<TableSection[]>([])
+// 是否还有更多早期数据
+const hasMoreEarlier = ref(false)
 
-const canGoEarlier = computed(() => startIdx.value + windowSize.value < allReportDates.value.length)
+const canGoEarlier = computed(() => hasMoreEarlier.value)
 const canGoLater = computed(() => startIdx.value > 0)
 
 const currentPeriodText = computed(() => {
@@ -134,14 +137,16 @@ async function loadData() {
   if (!props.stockCode) return
   loading.value = true
   try {
-    // 请求足够多的期数，然后前端切片
-    const limit = startIdx.value + windowSize.value
+    // 多请求1期作为探针，用于判断是否还有更早的数据
+    const fetchLimit = startIdx.value + windowSize.value + 1
     // annual视图时传递reportType="Annual"
     const reportType = currentView.value === 'annual' ? 'Annual' : undefined
-    const res = await props.fetchData(props.stockCode, currentView.value, limit, reportType)
+    const res = await props.fetchData(props.stockCode, currentView.value, fetchLimit, reportType)
     if (res.code === 0 && res.data) {
       allReportDates.value = res.data.report_dates || []
       allReportNames.value = res.data.report_names || []
+      // 判断是否还有更多早期数据
+      hasMoreEarlier.value = allReportDates.value.length > startIdx.value + windowSize.value
       // 切片：从 startIdx 开始取 windowSize 个
       const end = Math.min(startIdx.value + windowSize.value, allReportDates.value.length)
       reportDates.value = allReportDates.value.slice(startIdx.value, end)
@@ -160,6 +165,7 @@ async function loadData() {
       allReportNames.value = []
       reportDates.value = []
       sections.value = []
+      hasMoreEarlier.value = false
     }
   } catch (e) {
     console.error(e)
@@ -167,6 +173,7 @@ async function loadData() {
     allReportNames.value = []
     reportDates.value = []
     sections.value = []
+    hasMoreEarlier.value = false
   } finally {
     loading.value = false
   }
