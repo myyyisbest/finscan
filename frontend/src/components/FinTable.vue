@@ -8,26 +8,9 @@
         </a-radio-group>
       </div>
       <div class="period-pager">
-        <span class="period-label">报告期：</span>
-        <a-button
-          type="text"
-          size="small"
-          :disabled="!canGoEarlier"
-          @click="goEarlier"
-        >
-          <template #icon><left-outlined /></template>
-          更早
-        </a-button>
+        <span class="pager-btn" @click="goLater" title="返回最新">‹</span>
         <span class="current-period">{{ currentPeriodText }}</span>
-        <a-button
-          type="text"
-          size="small"
-          :disabled="!canGoLater"
-          @click="goLater"
-        >
-          更新
-          <template #icon><right-outlined /></template>
-        </a-button>
+        <span class="pager-btn" @click="goEarlier" title="上一期">›</span>
       </div>
     </div>
 
@@ -79,7 +62,6 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 
 interface TableItem {
   name: string
@@ -280,7 +262,32 @@ watch(() => props.stockCode, () => {
 .period-pager {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+}
+
+.pager-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #f0f7ff;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s;
+}
+
+.pager-btn:hover {
+  background: #dbeafe;
+  color: #1d40dc;
+}
+
+.pager-btn:active {
+  transform: scale(0.95);
 }
 
 .period-label {
