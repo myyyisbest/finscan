@@ -184,6 +184,7 @@ function isTotalRow(name: string): boolean {
     '流动资产合计', '非流动资产合计',
     '流动负债合计', '非流动负债合计',
     '资产总计', '负债合计',
+    '归属于母公司股东权益合计', '归属于母公司股东权益总计',
     '股东权益合计', '负债和股东权益合计',
   ]
   return totalItems.includes(name)
