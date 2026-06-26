@@ -77,6 +77,7 @@ const isInWatchlist = ref(false)
 
 const mainTabs = [
   { name: '财务分析', path: `/stock/${stockCode.value}/main-indicators` },
+  { name: '公司简介', path: `/stock/${stockCode.value}/profile` },
   { name: '公司公告', path: `/stock/${stockCode.value}/announcements` },
 ]
 
@@ -97,6 +98,7 @@ const isFinanceTab = computed(() => {
 
 function isTabActive(path: string) {
   if (path.endsWith('/announcements')) return route.path.endsWith('/announcements')
+  if (path.endsWith('/profile')) return route.path.endsWith('/profile')
   if (path.endsWith('/main-indicators')) return route.path.endsWith('/main-indicators') ||
                                               route.path.endsWith('/dupont-analysis') ||
                                               route.path.endsWith('/balance-sheet') ||
@@ -114,7 +116,8 @@ async function loadStockInfo() {
       stockInfo.value = res.data
       // 更新tab路径
       mainTabs[0].path = `/stock/${stockCode.value}/main-indicators`
-      mainTabs[1].path = `/stock/${stockCode.value}/announcements`
+      mainTabs[1].path = `/stock/${stockCode.value}/profile`
+      mainTabs[2].path = `/stock/${stockCode.value}/announcements`
     }
   } catch (e) {
     console.error(e)

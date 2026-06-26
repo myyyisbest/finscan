@@ -91,6 +91,23 @@ export const stockApi = {
   getInfo: (code: string) =>
     api.get<{ code: number; data: StockInfo }>(`/api/v1/stock/${code}`),
 
+  getProfile: (code: string) =>
+    api.get<{
+      code: number
+      data: {
+        basic: {
+          stock_code: string
+          stock_name: string | null
+          full_name: string | null
+          industry: string | null
+          market: string
+          list_date: string | null
+        }
+        profile: Record<string, string> | null
+        error: string | null
+      }
+    }>(`/api/v1/stock/${code}/profile`),
+
   getReportDates: (code: string, reportType?: string, limit = 20) =>
     api.get<{ code: number; data: ReportDate[] }>(
       `/api/v1/stock/${code}/reports/dates?limit=${limit}${reportType ? `&report_type=${reportType}` : ''}`

@@ -1,13 +1,33 @@
-"""股票基础信息API：搜索、列表、基本信息。"""
+"""股票基础信息API：搜索、列表、基本信息、公司简介。"""
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+import logging
 
 from app.db import get_db
 from app.core.response import success_response, fail_response
 from app.models import StockBasic, FinReport
 
 router = APIRouter(prefix="/api/v1/stock", tags=["stock"])
+
+log = logging.getLogger(__name__)
+
+
+def _detect_market(code: str) -> str:
+    """根据代码判断市场"""
+    code = code.strip()
+    if code.startswith("6"):
+        return "SH"
+    elif code.startswith("0") or code.startswith("3"):
+        return "SZ"
+    elif code.startswith("4") or code.startswith("8"):
+        return "BJ"
+    return "SZ"
+
+
+def _get_xq_symbol(code: str) -> str:
+    """获取雪球格式的symbol（如SH601127）"""
+    return f"{_detect_market(code)}{code}"
 
 
 @router.get("/search")
@@ -89,3 +109,54 @@ def get_report_dates(
         "report_type": r.report_type,
         "notice_date": str(r.notice_date) if r.notice_date else None,
     } for r in reports])
+
+
+@router.get("/{code}/profile")
+def get_stock_profile(code: str, db: Session = Depends(get_db)):
+    """获取公司简介：调用akshare的stock_individual_basic_info_xq接口。
+
+    返回字段：org_id/cnsp_id/org_name_cn/org_name_en/org_short_name_cn/org_short_name_en/
+    currency/listed_date/raised_capital/established_date/actual_controller/actual_controller_amount/
+    classi_name/pre_name/main_business/business_scope/office_address/org_website/org_telephone/
+    org_email/reg_address/reg_capital/enterprise_type/legal_rep/secretary/province/city/area/
+    employees_number/main_holders_count/main_business_scope/description/...
+    """
+    code_clean = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+    xq_symbol = _get_xq_symbol(code_clean)
+
+    # 先从数据库获取基础信息（保证一定有数据）
+    stock = db.query(StockBasic).filter(StockBasic.stock_code == code_clean).first()
+    basic_info = {
+        "stock_code": stock.stock_code if stock else code_clean,
+        "stock_name": stock.stock_name if stock else None,
+        "full_name": stock.full_name if stock else None,
+        "industry": stock.industry if stock else None,
+        "market": stock.market if stock else _detect_market(code_clean),
+        "list_date": str(stock.list_date) if stock and stock.list_date else None,
+    }
+
+    # 调用akshare获取公司简介
+    profile_data = None
+    error_msg = None
+    try:
+        import akshare as ak
+        df = ak.stock_individual_basic_info_xq(symbol=xq_symbol)
+        if df is not None and len(df) > 0:
+            # 转换为 {字段: 值} 的字典
+            profile_data = dict(zip(df.iloc[:, 0].tolist(), df.iloc[:, 1].tolist()))
+    except Exception as e:
+        error_msg = str(e)
+        log.warning("akshare stock_individual_basic_info_xq 失败: %s", e)
+
+    if not profile_data:
+        return success_response({
+            "basic": basic_info,
+            "profile": None,
+            "error": error_msg or "akshare接口暂不可用",
+        })
+
+    return success_response({
+        "basic": basic_info,
+        "profile": profile_data,
+        "error": None,
+    })
