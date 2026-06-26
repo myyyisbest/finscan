@@ -18,6 +18,7 @@ from app.api import (
 from app.api.stock import router as stock_router
 from app.api.finance import router as finance_router
 from app.api.collector import router as collector_router
+from app.api.finscan import router as finscan_router
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
@@ -59,6 +60,7 @@ app.include_router(announcement_router)
 app.include_router(stock_router)
 app.include_router(finance_router)
 app.include_router(collector_router)
+app.include_router(finscan_router)
 
 
 @app.get(f"{settings.API_PREFIX}/ping")
