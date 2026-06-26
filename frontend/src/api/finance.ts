@@ -98,9 +98,9 @@ export const stockApi = {
 }
 
 export const financeApi = {
-  getMainIndicators: (code: string, view = 'report', quarters = 6) =>
+  getMainIndicators: (code: string, view = 'report', quarters = 6, reportType?: string) =>
     api.get<{ code: number; data: MainIndicatorsData }>(
-      `/api/v1/finance/${code}/main-indicators?view=${view}&quarters=${quarters}`
+      `/api/v1/finance/${code}/main-indicators?view=${view}&quarters=${quarters}${reportType ? `&report_type=${reportType}` : ''}`
     ),
 
   getBalanceSheet: (code: string, view = 'report', quarters = 6, reportType?: string) =>

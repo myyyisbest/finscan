@@ -3,8 +3,9 @@
     <!-- 表头切换区域 -->
     <div class="table-toolbar">
       <div class="view-toggle">
-        <a-radio-group v-model:value="currentView" button-style="solid" size="small" @change="loadData">
+        <a-radio-group v-model:value="currentView" button-style="solid" size="small" @change="onViewChange">
           <a-radio-button value="report">按报告期</a-radio-button>
+          <a-radio-button value="annual">按年度</a-radio-button>
         </a-radio-group>
       </div>
       <div class="period-pager">
@@ -124,13 +125,20 @@ function goLater() {
   }
 }
 
+function onViewChange() {
+  startIdx.value = 0
+  loadData()
+}
+
 async function loadData() {
   if (!props.stockCode) return
   loading.value = true
   try {
     // 请求足够多的期数，然后前端切片
     const limit = startIdx.value + windowSize.value
-    const res = await props.fetchData(props.stockCode, currentView.value, limit)
+    // annual视图时传递reportType="Annual"
+    const reportType = currentView.value === 'annual' ? 'Annual' : undefined
+    const res = await props.fetchData(props.stockCode, currentView.value, limit, reportType)
     if (res.code === 0 && res.data) {
       allReportDates.value = res.data.report_dates || []
       allReportNames.value = res.data.report_names || []
