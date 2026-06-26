@@ -7,7 +7,7 @@ from typing import List, Optional
 from app.db import get_db
 from app.core.auth import get_current_user
 from app.core.response import success_response, fail_response
-from app.models import Watchlist, User, StockBasic, FinReport
+from app.models import Watchlist, User, StockBasic, FinReport, FinMainIndicator
 
 router = APIRouter(prefix="/api/v1/watchlist", tags=["watchlist"])
 
@@ -44,6 +44,42 @@ def list_watchlist(
             .order_by(FinReport.report_date.desc())
             .first()
         )
+        latest_ind = (
+            db.query(FinMainIndicator)
+            .filter(FinMainIndicator.stock_code == code)
+            .order_by(FinMainIndicator.report_date.desc())
+            .first()
+        )
+
+        # 从 JSON 提取关键指标（兼容新老数据）
+        total_revenue = None
+        net_profit_parent = None
+        if latest:
+            income = latest.income_json or {}
+            total_revenue = (
+                float(latest.total_revenue)
+                if latest.total_revenue is not None
+                else _safe_float(income.get("TOTAL_OPERATE_INCOME") or income.get("TOTALOPERATEREVE"))
+            )
+            net_profit_parent = (
+                float(latest.net_profit_parent)
+                if latest.net_profit_parent is not None
+                else _safe_float(income.get("PARENT_NETPROFIT") or income.get("PARENTNETPROFIT"))
+            )
+
+        roe = None
+        debt_ratio = None
+        revenue_yoy = None
+        if latest_ind and latest_ind.raw_json:
+            raw = latest_ind.raw_json
+            roe = _safe_float(raw.get("ROEJQ"))
+            debt_ratio = _safe_float(raw.get("ZCFZL"))
+            revenue_yoy = _safe_float(raw.get("TOTALOPERATEREVETZ"))
+        elif latest:
+            roe = float(latest.roe) if latest.roe is not None else None
+            debt_ratio = float(latest.debt_ratio) if latest.debt_ratio is not None else None
+            revenue_yoy = float(latest.revenue_yoy) if latest.revenue_yoy is not None else None
+
         result.append({
             "stock_code": code,
             "stock_name": w.stock_name or (stock.stock_name if stock else code),
@@ -54,15 +90,26 @@ def list_watchlist(
             "add_time": str(w.add_time),
             "latest_report": {
                 "report_date": str(latest.report_date) if latest else None,
-                "report_name": latest.report_name if latest else None,
-                "total_revenue": float(latest.total_revenue) if latest and latest.total_revenue else None,
-                "net_profit_parent": float(latest.net_profit_parent) if latest and latest.net_profit_parent else None,
-                "roe": float(latest.roe) if latest and latest.roe else None,
-                "debt_ratio": float(latest.debt_ratio) if latest and latest.debt_ratio else None,
-                "revenue_yoy": float(latest.revenue_yoy) if latest and latest.revenue_yoy else None,
-            } if latest else None,
+                "report_name": latest.report_name if latest else (
+                    latest_ind.raw_json.get("REPORT_TYPE", "") if latest_ind and latest_ind.raw_json else None
+                ),
+                "total_revenue": total_revenue,
+                "net_profit_parent": net_profit_parent,
+                "roe": roe,
+                "debt_ratio": debt_ratio,
+                "revenue_yoy": revenue_yoy,
+            } if latest or latest_ind else None,
         })
     return success_response(result)
+
+
+def _safe_float(v) -> float | None:
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        return None
 
 
 @router.post("")
