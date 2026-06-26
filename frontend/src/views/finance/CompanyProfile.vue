@@ -167,36 +167,6 @@
         <a-card v-if="getField('description')" class="profile-card" title="公司简介" :bordered="false">
           <p class="description-text">{{ getField('description') }}</p>
         </a-card>
-
-        <!-- 最新公告 -->
-        <a-card class="profile-card" title="最新公告（近90天）" :bordered="false">
-          <a-empty
-            v-if="!announcements.length"
-            :description="announceError || '暂无公告数据'"
-          />
-          <a-list
-            v-else
-            size="small"
-            :data-source="announcements"
-            :split="false"
-          >
-            <template #renderItem="{ item }">
-              <a-list-item class="announce-item">
-                <a
-                  v-if="item.url"
-                  :href="item.url"
-                  target="_blank"
-                  rel="noopener"
-                  class="announce-title"
-                >
-                  {{ item.title }}
-                </a>
-                <span v-else class="announce-title">{{ item.title }}</span>
-                <span class="announce-date">{{ item.date }}</span>
-              </a-list-item>
-            </template>
-          </a-list>
-        </a-card>
       </div>
     </a-spin>
   </div>
@@ -205,14 +175,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { stockApi } from '@/api/finance'
-
-interface Announcement {
-  title: string
-  date: string
-  time: string
-  sec_name: string
-  url: string
-}
 
 const props = defineProps<{
   stockCode: string
@@ -223,8 +185,6 @@ const loading = ref(false)
 const profile = ref<Record<string, string> | null>(null)
 const basic = ref<any>(null)
 const errorMessage = ref<string>('')
-const announcements = ref<Announcement[]>([])
-const announceError = ref<string>('')
 
 function getField(key: string): string {
   if (!profile.value) return ''
@@ -244,17 +204,13 @@ async function loadData() {
   if (!props.stockCode) return
   loading.value = true
   errorMessage.value = ''
-  announceError.value = ''
   profile.value = null
-  announcements.value = []
   try {
     const res = await stockApi.getProfile(props.stockCode)
     if (res.code === 0 && res.data) {
       basic.value = res.data.basic
       profile.value = res.data.profile
       errorMessage.value = res.data.profile_error || ''
-      announcements.value = res.data.announcements || []
-      announceError.value = res.data.announce_error || ''
     } else {
       errorMessage.value = '接口返回异常'
     }
@@ -352,43 +308,6 @@ watch(() => props.stockCode, (val) => {
 .info-alert {
   margin-top: 12px;
   font-size: 12px;
-}
-
-.announce-item {
-  padding: 8px 0 !important;
-  border-bottom: 1px dashed #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.announce-item:last-child {
-  border-bottom: none;
-}
-
-.announce-title {
-  flex: 1;
-  color: #1d4ed8;
-  text-decoration: none;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.announce-title:hover {
-  text-decoration: underline;
-}
-
-.announce-date {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: #999;
-  font-variant-numeric: tabular-nums;
 }
 
 .empty-state {
