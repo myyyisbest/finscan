@@ -1,32 +1,22 @@
 """东方财富 EM Web 数据采集器。
 
-使用东方财富接口获取财务数据：
-- 主要指标: https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew (F10主要指标页)
-- 三表数据: 使用 akshare 调用东方财富完整接口（300+字段）
-
-特点：
-- 主要指标约140+字段
-- 三表数据300+字段（资产负债表/利润表/现金流量表）
-- 请求频率可控
+使用 akshare 调用东方财富接口获取财务数据：
+- 主要指标: stock_financial_analysis_indicator_em (140+字段)
+- 资产负债表: stock_balance_sheet_by_report_em (300+字段)
+- 利润表: stock_profit_sheet_by_report_em (200+字段)
+- 现金流量表: stock_cash_flow_sheet_by_report_em (250+字段)
 """
 import time
 import json
 import logging
+import math
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional
 
-import requests
 from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Referer": "https://emweb.securities.eastmoney.com/",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-}
 
 # 主要指标字段映射（东方财富字段 -> 数据库字段）
 MAIN_INDICATOR_MAPPING = {
@@ -94,8 +84,13 @@ def _detect_market(code: str) -> str:
 
 
 def _get_secucode(code: str) -> str:
-    """获取东财格式的代码"""
+    """获取东财格式的代码（如SZ002130）"""
     return f"{_detect_market(code)}{code}"
+
+
+def _get_ak_symbol(code: str) -> str:
+    """获取akshare格式的代码（如002130.SZ）"""
+    return f"{code}.{_detect_market(code)}"
 
 
 def _parse_report_type(report_type: str) -> tuple[str, str]:
@@ -113,38 +108,45 @@ def _parse_report_type(report_type: str) -> tuple[str, str]:
 
 
 def collect_main_indicators(code: str, secucode: str = None) -> list[dict]:
-    """采集主要财务指标（ZYZBAjaxNew接口）"""
-    if secucode is None:
-        secucode = _get_secucode(code)
+    """采集主要财务指标（使用akshare获取完整数据）"""
+    ak_symbol = _get_ak_symbol(code)
 
-    url = f"https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew?type=0&code={secucode}"
-
-    for attempt in range(3):
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            if resp.status_code == 200 and resp.text.strip():
-                data = resp.json()
-                if data and data.get("data"):
-                    log.info("[%s] 主要指标: %d 期", code, len(data["data"]))
-                    return data["data"]
-            log.warning("[%s] 主要指标接口返回空: status=%s, len=%s", code, resp.status_code, len(resp.text))
-        except Exception as e:
-            log.warning("[%s] 主要指标采集失败(第%d次): %s", code, attempt + 1, e)
-            time.sleep(2)
+    try:
+        import akshare as ak
+        df = ak.stock_financial_analysis_indicator_em(symbol=ak_symbol, indicator="按报告期")
+        if df is not None and len(df) > 0:
+            data = df.to_dict("records")
+            # 清理 NaN 值和日期格式
+            for row in data:
+                for k, v in list(row.items()):
+                    if isinstance(v, float) and math.isnan(v):
+                        row[k] = None
+                    elif hasattr(v, "strftime"):
+                        row[k] = v.strftime("%Y-%m-%d")
+            log.info("[%s] 主要指标: %d 期", code, len(data))
+            return data
+    except Exception as e:
+        log.warning("[%s] 主要指标采集失败: %s", code, e)
 
     return []
 
 
 def collect_income_statement(code: str, secucode: str = None) -> list[dict]:
     """采集利润表（使用akshare获取完整数据）"""
-    if secucode is None:
-        secucode = _get_secucode(code)
+    ak_symbol = _get_ak_symbol(code)
 
     try:
         import akshare as ak
-        df = ak.stock_profit_sheet_by_report_em(symbol=secucode)
+        df = ak.stock_profit_sheet_by_report_em(symbol=ak_symbol)
         if df is not None and len(df) > 0:
             data = df.to_dict("records")
+            # 清理 NaN 值和日期格式
+            for row in data:
+                for k, v in list(row.items()):
+                    if isinstance(v, float) and math.isnan(v):
+                        row[k] = None
+                    elif hasattr(v, "strftime"):
+                        row[k] = v.strftime("%Y-%m-%d")
             log.info("[%s] 利润表: %d 期", code, len(data))
             return data
     except Exception as e:
@@ -155,14 +157,20 @@ def collect_income_statement(code: str, secucode: str = None) -> list[dict]:
 
 def collect_balance_sheet(code: str, secucode: str = None) -> list[dict]:
     """采集资产负债表（使用akshare获取完整数据）"""
-    if secucode is None:
-        secucode = _get_secucode(code)
+    ak_symbol = _get_ak_symbol(code)
 
     try:
         import akshare as ak
-        df = ak.stock_balance_sheet_by_report_em(symbol=secucode)
+        df = ak.stock_balance_sheet_by_report_em(symbol=ak_symbol)
         if df is not None and len(df) > 0:
             data = df.to_dict("records")
+            # 清理 NaN 值和日期格式
+            for row in data:
+                for k, v in list(row.items()):
+                    if isinstance(v, float) and math.isnan(v):
+                        row[k] = None
+                    elif hasattr(v, "strftime"):
+                        row[k] = v.strftime("%Y-%m-%d")
             log.info("[%s] 资产负债表: %d 期", code, len(data))
             return data
     except Exception as e:
@@ -173,14 +181,20 @@ def collect_balance_sheet(code: str, secucode: str = None) -> list[dict]:
 
 def collect_cash_flow(code: str, secucode: str = None) -> list[dict]:
     """采集现金流量表（使用akshare获取完整数据）"""
-    if secucode is None:
-        secucode = _get_secucode(code)
+    ak_symbol = _get_ak_symbol(code)
 
     try:
         import akshare as ak
-        df = ak.stock_cash_flow_sheet_by_report_em(symbol=secucode)
+        df = ak.stock_cash_flow_sheet_by_report_em(symbol=ak_symbol)
         if df is not None and len(df) > 0:
             data = df.to_dict("records")
+            # 清理 NaN 值和日期格式
+            for row in data:
+                for k, v in list(row.items()):
+                    if isinstance(v, float) and math.isnan(v):
+                        row[k] = None
+                    elif hasattr(v, "strftime"):
+                        row[k] = v.strftime("%Y-%m-%d")
             log.info("[%s] 现金流量表: %d 期", code, len(data))
             return data
     except Exception as e:
