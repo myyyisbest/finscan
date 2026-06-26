@@ -38,6 +38,7 @@
                 <td
                   :colspan="reportDates.length + 1"
                   class="section-header"
+                  :class="{ 'is-total': isTotalRow(section.name) }"
                 >
                   {{ section.name }}
                 </td>
@@ -176,6 +177,20 @@ function getValueClass(item: TableItem, val: number | null) {
   return ''
 }
 
+// 判断是否为合计行
+const totalRowNames = [
+  '流动资产合计', '非流动资产合计', '资产总计',
+  '流动负债合计', '非流动负债合计', '负债合计',
+  '股东权益合计', '负债和股东权益合计',
+  '经营活动现金流入小计', '经营活动现金流出小计', '经营活动产生的现金流量净额',
+  '投资活动现金流入小计', '投资活动现金流出小计', '投资活动产生的现金流量净额',
+  '筹资活动现金流入小计', '筹资活动现金流出小计', '筹资活动产生的现金流量净额',
+  '现金及现金等价物净增加额',
+]
+function isTotalRow(name: string): boolean {
+  return totalRowNames.includes(name)
+}
+
 watch(() => props.stockCode, () => {
   if (props.stockCode) {
     loadData()
@@ -247,6 +262,16 @@ watch(() => props.stockCode, () => {
   font-size: 13px;
   padding: 10px 12px;
   border-bottom: 1px solid #e6f4ff;
+}
+
+/* 合计行：加粗突出，无背景色 */
+.section-header.is-total {
+  background: transparent;
+  color: #333;
+  font-weight: 700;
+  font-size: 13px;
+  border-top: 2px solid #e8e8e8;
+  border-bottom: 2px solid #d0d0d0;
 }
 
 .data-row:hover td {

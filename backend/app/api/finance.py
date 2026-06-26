@@ -65,11 +65,18 @@ def get_main_indicators(
 ):
     """主要财务指标（东财主要指标页）。
 
-    从FinMainIndicator表读取原始JSON数据，按东财格式组织返回。
+    主要指标从FinMainIndicator表读取，资产负债数据从FinReport表读取。
     """
     code = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
-    query = db.query(FinMainIndicator).filter(FinMainIndicator.stock_code == code)
-    indicators = query.order_by(FinMainIndicator.report_date.desc()).limit(quarters).all()
+
+    # 获取主要指标
+    ind_query = db.query(FinMainIndicator).filter(FinMainIndicator.stock_code == code)
+    indicators = ind_query.order_by(FinMainIndicator.report_date.desc()).limit(quarters).all()
+
+    # 获取资产负债表数据（用于总资产/总负债/股东权益）
+    bs_query = db.query(FinReport).filter(FinReport.stock_code == code)
+    fin_reports = bs_query.order_by(FinReport.report_date.desc()).limit(quarters).all()
+    bs_map = {str(r.report_date): r for r in fin_reports}
 
     if not indicators:
         return success_response({
@@ -95,6 +102,24 @@ def get_main_indicators(
 
     def col(key):
         return [get_val(ind.raw_json, key) for ind in indicators]
+
+    def bs_col(key):
+        """从资产负债表获取数据"""
+        result = []
+        for dt in dates:
+            r = bs_map.get(dt)
+            if r and r.balance_json:
+                v = r.balance_json.get(key)
+                if v is not None and not (isinstance(v, float) and v != v):  # 排除NaN
+                    try:
+                        result.append(float(v))
+                    except (ValueError, TypeError):
+                        result.append(None)
+                else:
+                    result.append(None)
+            else:
+                result.append(None)
+        return result
 
     data = {
         "report_dates": dates,
@@ -158,9 +183,9 @@ def get_main_indicators(
             {
                 "name": "资产负债关键科目",
                 "items": [
-                    {"name": "总资产", "key": "TOTAL_ASSETS", "values": col("TOTAL_ASSETS")},
-                    {"name": "总负债", "key": "TOTAL_LIABILITIES", "values": col("TOTAL_LIABILITIES")},
-                    {"name": "股东权益合计", "key": "TOTAL_EQUITY", "values": col("TOTAL_EQUITY")},
+                    {"name": "总资产", "key": "TOTAL_ASSETS", "values": bs_col("TOTAL_ASSETS")},
+                    {"name": "总负债", "key": "TOTAL_LIABILITIES", "values": bs_col("TOTAL_LIABILITIES")},
+                    {"name": "股东权益合计", "key": "TOTAL_EQUITY", "values": bs_col("TOTAL_EQUITY")},
                 ]
             },
         ]
