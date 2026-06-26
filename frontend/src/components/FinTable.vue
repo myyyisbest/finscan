@@ -43,7 +43,7 @@
                   {{ section.name }}
                 </td>
               </tr>
-              <tr v-for="(item, iIdx) in section.items" :key="iIdx" class="data-row">
+              <tr v-for="(item, iIdx) in section.items" :key="iIdx" class="data-row" :class="{ 'is-total': isTotalRow(item.name) }">
                 <td class="fin-td item-name" :title="item.name">{{ item.name }}</td>
                 <td
                   v-for="(val, vIdx) in item.values"
@@ -177,18 +177,8 @@ function getValueClass(item: TableItem, val: number | null) {
   return ''
 }
 
-// 判断是否为合计行
-const totalRowNames = [
-  '流动资产合计', '非流动资产合计', '资产总计',
-  '流动负债合计', '非流动负债合计', '负债合计',
-  '股东权益合计', '负债和股东权益合计',
-  '经营活动现金流入小计', '经营活动现金流出小计', '经营活动产生的现金流量净额',
-  '投资活动现金流入小计', '投资活动现金流出小计', '投资活动产生的现金流量净额',
-  '筹资活动现金流入小计', '筹资活动现金流出小计', '筹资活动产生的现金流量净额',
-  '现金及现金等价物净增加额',
-]
 function isTotalRow(name: string): boolean {
-  return totalRowNames.includes(name)
+  return name.includes('合计') || name.includes('总计') || name.includes('小计')
 }
 
 watch(() => props.stockCode, () => {
@@ -276,6 +266,19 @@ watch(() => props.stockCode, () => {
 
 .data-row:hover td {
   background: #f8fafc;
+}
+
+.data-row.is-total td {
+  font-weight: 700;
+  color: #111;
+  background: #fafafa;
+  border-top: 2px solid #e0e0e0;
+  border-bottom: 2px solid #d0d0d0;
+}
+
+.data-row.is-total .item-name {
+  font-weight: 700;
+  background: #fafafa;
 }
 
 .fin-td {

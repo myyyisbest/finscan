@@ -249,11 +249,6 @@ BS_GROUPS = [
             ("递延所得税资产", ["DEFER_TAX_ASSET"]),
             ("其他非流动资产", ["OTHER_NONCURRENT_ASSET"]),
             ("非流动资产合计", ["TOTAL_NONCURRENT_ASSETS"]),
-        ]
-    },
-    {
-        "name": "资产总计",
-        "fields": [
             ("资产总计", ["TOTAL_ASSETS"]),
         ]
     },
@@ -285,11 +280,6 @@ BS_GROUPS = [
             ("递延所得税负债", ["DEFER_TAX_LIAB"]),
             ("其他非流动负债", ["OTHER_NONCURRENT_LIAB"]),
             ("非流动负债合计", ["TOTAL_NONCURRENT_LIAB"]),
-        ]
-    },
-    {
-        "name": "负债合计",
-        "fields": [
             ("负债合计", ["TOTAL_LIABILITIES", "TOTAL_LIAB"]),
         ]
     },
