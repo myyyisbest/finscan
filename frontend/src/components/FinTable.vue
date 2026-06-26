@@ -123,14 +123,22 @@ function formatDate(dateStr: string) {
 function formatValue(key: string, val: number | null): string {
   if (val === null || val === undefined) return '-'
   const lowerKey = key.toLowerCase()
-  // 比率类（%）字段
-  if (lowerKey.includes('ratio') || lowerKey.includes('rate') || lowerKey.includes('roe') ||
-      lowerKey.includes('roa') || lowerKey.includes('margin') || lowerKey.includes('yoy') ||
-      lowerKey.includes('qoq') || lowerKey.includes('percent') || key.endsWith('_ratio')) {
+  // 比率类（%）字段：精确匹配常见比率字段名模式
+  const ratePatterns = [
+    /_ratio$/, /_rate$/, /_yoy$/, /_qoq$/, /_margin$/, /_growth$/, /_percent$/,
+    /^roe/, /^roa/, /^zcfzl/, /^xsmll/, /^xsjll/, /^zzcjll/, /^ld$/, /^sd$/, /^xjllb/,
+    /_turnover$/, /_turnover_days$/,
+  ]
+  const isRatio = ratePatterns.some(p => p.test(lowerKey)) ||
+    ['roe', 'roa', 'debt_ratio', 'current_ratio', 'quick_ratio', 'gross_margin',
+     'net_margin', 'asset_turnover', 'inventory_turnover', 'receivable_turnover',
+     'revenue_yoy', 'net_profit_yoy', 'gross_profit_yoy',
+    ].includes(lowerKey)
+  if (isRatio) {
     return val.toFixed(2) + '%'
   }
   // 每股指标（EPS/BPS等），单位元，保留4位
-  if (lowerKey.includes('eps') || lowerKey.includes('bps') || lowerKey.includes('_ps') || key === 'BASIC_EPS' || key === 'DILUTED_EPS') {
+  if (lowerKey.includes('eps') || lowerKey.includes('bps') || lowerKey.endsWith('_ps') || key === 'BASIC_EPS' || key === 'DILUTED_EPS') {
     return val.toFixed(4)
   }
   // 金额类字段：自动转换为万/亿
@@ -141,7 +149,7 @@ function formatValue(key: string, val: number | null): string {
     return (val / 1e4).toFixed(2) + '万'
   }
   // 流动比率/速动比率等
-  if (lowerKey.includes('current') || lowerKey.includes('quick')) {
+  if (lowerKey === 'ld' || lowerKey === 'sd' || lowerKey.includes('current_ratio') || lowerKey.includes('quick_ratio')) {
     return val.toFixed(2)
   }
   return val.toFixed(2)
