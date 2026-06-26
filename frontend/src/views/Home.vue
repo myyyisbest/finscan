@@ -164,10 +164,13 @@ async function loadWatchlist() {
 
 function formatWan(val: number) {
   if (val == null) return '-'
-  if (Math.abs(val) >= 10000) {
-    return (val / 10000).toFixed(2) + '亿'
+  const absVal = Math.abs(val)
+  if (absVal >= 1e8) {
+    return (val / 1e8).toFixed(2) + '亿'
+  } else if (absVal >= 1e4) {
+    return (val / 1e4).toFixed(2) + '万'
   }
-  return val.toFixed(2) + '万'
+  return val.toFixed(2)
 }
 
 function getProfitClass(val: number) {
