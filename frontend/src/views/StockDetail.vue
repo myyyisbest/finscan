@@ -76,11 +76,7 @@ const pageLoading = ref(false)
 const isInWatchlist = ref(false)
 
 const mainTabs = [
-  { name: '主要指标', path: `/stock/${stockCode.value}/main-indicators` },
-  { name: '杜邦分析', path: `/stock/${stockCode.value}/dupont-analysis` },
-  { name: '资产负债表', path: `/stock/${stockCode.value}/balance-sheet` },
-  { name: '利润表', path: `/stock/${stockCode.value}/income-statement` },
-  { name: '现金流量表', path: `/stock/${stockCode.value}/cash-flow` },
+  { name: '财务分析', path: `/stock/${stockCode.value}/main-indicators` },
   { name: '公司公告', path: `/stock/${stockCode.value}/announcements` },
 ]
 
@@ -90,13 +86,22 @@ const financeSubTabs = computed(() => [
   { name: '资产负债表', path: `/stock/${stockCode.value}/balance-sheet` },
   { name: '利润表', path: `/stock/${stockCode.value}/income-statement` },
   { name: '现金流量表', path: `/stock/${stockCode.value}/cash-flow` },
-  { name: '公司公告', path: `/stock/${stockCode.value}/announcements` },
 ])
 
-const isFinanceTab = computed(() => route.path.includes('/stock/'))
+const isFinanceTab = computed(() => {
+  const p = route.path
+  return p.endsWith('/main-indicators') || p.endsWith('/dupont-analysis') ||
+         p.endsWith('/balance-sheet') || p.endsWith('/income-statement') ||
+         p.endsWith('/cash-flow')
+})
 
 function isTabActive(path: string) {
-  if (path.endsWith('/main-indicators')) return route.path.endsWith('/main-indicators')
+  if (path.endsWith('/announcements')) return route.path.endsWith('/announcements')
+  if (path.endsWith('/main-indicators')) return route.path.endsWith('/main-indicators') ||
+                                              route.path.endsWith('/dupont-analysis') ||
+                                              route.path.endsWith('/balance-sheet') ||
+                                              route.path.endsWith('/income-statement') ||
+                                              route.path.endsWith('/cash-flow')
   return route.path.startsWith(path)
 }
 
@@ -108,10 +113,8 @@ async function loadStockInfo() {
     if (res.code === 0) {
       stockInfo.value = res.data
       // 更新tab路径
-      mainTabs.forEach((tab, i) => {
-        const basePath = ['main-indicators', 'dupont-analysis', 'balance-sheet', 'income-statement', 'cash-flow', 'announcements'][i]
-        tab.path = `/stock/${stockCode.value}/${basePath}`
-      })
+      mainTabs[0].path = `/stock/${stockCode.value}/main-indicators`
+      mainTabs[1].path = `/stock/${stockCode.value}/announcements`
     }
   } catch (e) {
     console.error(e)
