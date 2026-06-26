@@ -190,92 +190,96 @@ BS_GROUPS = [
     {
         "name": "流动资产",
         "fields": [
-            ("货币资金", "MONETARYFUNDS"),
-            ("交易性金融资产", "FVTPL_FINASSET"),
-            ("应收票据及应收账款", "NOTE_ACCOUNTS_RECE"),
-            ("应收账款", "ACCOUNTS_RECE"),
-            ("预付款项", "PREPAYMENT"),
-            ("其他应收款合计", "TOTAL_OTHER_RECE"),
-            ("存货", "INVENTORY"),
-            ("合同资产", "CONTRACT_ASSET"),
-            ("一年内到期的非流动资产", "NONCURRENT_ASSET_1YEAR"),
-            ("其他流动资产", "OTHER_CURRENT_ASSET"),
-            ("流动资产合计", "TOTAL_CURRENT_ASSETS"),
+            ("货币资金", ["MONETARYFUNDS"]),
+            ("交易性金融资产", ["FVTPL_FINASSET", "TRADE_FINANCIAL_ASSET"]),
+            ("应收票据", ["NOTE_RECE", "BILL_RECE"]),
+            ("应收账款", ["ACCOUNTS_RECE"]),
+            ("应收票据及应收账款", ["NOTE_ACCOUNTS_RECE", "ACCOUNTS_RECE", "NOTE_RECE"]),
+            ("预付款项", ["PREPAYMENT", "ADVANCE_PAYMENT"]),
+            ("其他应收款", ["OTHER_RECE", "OTHER_RECEIVABLE"]),
+            ("其他应收款合计", ["TOTAL_OTHER_RECE", "OTHER_RECE"]),
+            ("存货", ["INVENTORY"]),
+            ("合同资产", ["CONTRACT_ASSET"]),
+            ("一年内到期的非流动资产", ["NONCURRENT_ASSET_1YEAR", "NON_CURRENT_ASSET_1Y"]),
+            ("其他流动资产", ["OTHER_CURRENT_ASSET"]),
+            ("流动资产合计", ["TOTAL_CURRENT_ASSETS"]),
         ]
     },
     {
         "name": "非流动资产",
         "fields": [
-            ("可供出售金融资产", "AVAILABLE_SALE_FINASSET"),
-            ("持有至到期投资", "HOLD_MATURITY_INVEST"),
-            ("长期应收款", "LONG_RECE"),
-            ("长期股权投资", "LONG_EQUITY_INVEST"),
-            ("投资性房地产", "INVEST_REALESTATE"),
-            ("固定资产", "FIXED_ASSET"),
-            ("在建工程", "CIP"),
-            ("生产性生物资产", "PRODUCTIVE_BIOLOGY_ASSET"),
-            ("油气资产", "OIL_GAS_ASSET"),
-            ("无形资产", "INTANGIBLE_ASSET"),
-            ("开发支出", "DEVELOP_EXPENSE"),
-            ("商誉", "GOODWILL"),
-            ("长期待摊费用", "LONG_PREPAID_EXPENSE"),
-            ("递延所得税资产", "DEFER_TAX_ASSET"),
-            ("其他非流动资产", "OTHER_NONCURRENT_ASSET"),
-            ("非流动资产合计", "TOTAL_NONCURRENT_ASSETS"),
+            ("可供出售金融资产", ["AVAILABLE_SALE_FINASSET", "AVAIL_SALE_FIN"]),
+            ("持有至到期投资", ["HOLD_MATURITY_INVEST"]),
+            ("长期应收款", ["LONG_RECE", "LONG_TERM_RECE"]),
+            ("长期股权投资", ["LONG_EQUITY_INVEST", "LONG_EQ_INVEST"]),
+            ("投资性房地产", ["INVEST_REALESTATE"]),
+            ("固定资产", ["FIXED_ASSET"]),
+            ("在建工程", ["CIP", "CONSTRUCTION_IN_PROGRESS"]),
+            ("生产性生物资产", ["PRODUCTIVE_BIOLOGY_ASSET"]),
+            ("油气资产", ["OIL_GAS_ASSET"]),
+            ("无形资产", ["INTANGIBLE_ASSET"]),
+            ("开发支出", ["DEVELOP_EXPENSE"]),
+            ("商誉", ["GOODWILL"]),
+            ("长期待摊费用", ["LONG_PREPAID_EXPENSE"]),
+            ("递延所得税资产", ["DEFER_TAX_ASSET"]),
+            ("其他非流动资产", ["OTHER_NONCURRENT_ASSET"]),
+            ("非流动资产合计", ["TOTAL_NONCURRENT_ASSETS"]),
         ]
     },
     {
         "name": "资产总计",
         "fields": [
-            ("资产总计", "TOTAL_ASSETS"),
+            ("资产总计", ["TOTAL_ASSETS"]),
         ]
     },
     {
         "name": "流动负债",
         "fields": [
-            ("短期借款", "SHORT_LOAN"),
-            ("交易性金融负债", "FVTPL_FINLIAB"),
-            ("应付票据及应付账款", "NOTE_ACCOUNTS_PAYABLE"),
-            ("应付账款", "ACCOUNTS_PAYABLE"),
-            ("预收款项", "ADVANCE_RECEIVABLES"),
-            ("合同负债", "CONTRACT_LIAB"),
-            ("应付职工薪酬", "STAFF_SALARY_PAYABLE"),
-            ("应交税费", "TAX_PAYABLE"),
-            ("其他应付款合计", "TOTAL_OTHER_PAYABLE"),
-            ("一年内到期的非流动负债", "NONCURRENT_LIAB_1YEAR"),
-            ("其他流动负债", "OTHER_CURRENT_LIAB"),
-            ("流动负债合计", "TOTAL_CURRENT_LIAB"),
+            ("短期借款", ["SHORT_LOAN"]),
+            ("交易性金融负债", ["FVTPL_FINLIAB", "TRADE_FINANCIAL_LIAB"]),
+            ("应付票据", ["NOTE_PAYABLE", "BILL_PAYABLE"]),
+            ("应付账款", ["ACCOUNTS_PAYABLE"]),
+            ("应付票据及应付账款", ["NOTE_ACCOUNTS_PAYABLE", "ACCOUNTS_PAYABLE"]),
+            ("预收款项", ["ADVANCE_RECEIVABLES"]),
+            ("合同负债", ["CONTRACT_LIAB"]),
+            ("应付职工薪酬", ["STAFF_SALARY_PAYABLE", "EMPLOYEE_PAYABLE"]),
+            ("应交税费", ["TAX_PAYABLE"]),
+            ("其他应付款", ["OTHER_PAYABLE"]),
+            ("其他应付款合计", ["TOTAL_OTHER_PAYABLE", "OTHER_PAYABLE"]),
+            ("一年内到期的非流动负债", ["NONCURRENT_LIAB_1YEAR"]),
+            ("其他流动负债", ["OTHER_CURRENT_LIAB"]),
+            ("流动负债合计", ["TOTAL_CURRENT_LIAB"]),
         ]
     },
     {
         "name": "非流动负债",
         "fields": [
-            ("长期借款", "LONG_LOAN"),
-            ("应付债券", "BOND_PAYABLE"),
-            ("长期应付款", "LONG_PAYABLE"),
-            ("递延所得税负债", "DEFER_TAX_LIAB"),
-            ("其他非流动负债", "OTHER_NONCURRENT_LIAB"),
-            ("非流动负债合计", "TOTAL_NONCURRENT_LIAB"),
+            ("长期借款", ["LONG_LOAN"]),
+            ("应付债券", ["BOND_PAYABLE"]),
+            ("长期应付款", ["LONG_PAYABLE"]),
+            ("递延所得税负债", ["DEFER_TAX_LIAB"]),
+            ("其他非流动负债", ["OTHER_NONCURRENT_LIAB"]),
+            ("非流动负债合计", ["TOTAL_NONCURRENT_LIAB"]),
         ]
     },
     {
         "name": "负债合计",
         "fields": [
-            ("负债合计", "TOTAL_LIABILITIES"),
+            ("负债合计", ["TOTAL_LIABILITIES", "TOTAL_LIAB"]),
         ]
     },
     {
         "name": "所有者权益",
         "fields": [
-            ("股本", "SHARE_CAPITAL"),
-            ("资本公积", "CAPITAL_RESERVE"),
-            ("盈余公积", "SURPLUS_RESERVE"),
-            ("未分配利润", "UNASSIGN_RPOFIT"),
-            ("其他综合收益", "OTHER_COMPRE_INCOME"),
-            ("归属于母公司股东权益合计", "TOTAL_PARENT_EQUITY"),
-            ("少数股东权益", "MINORITY_EQUITY"),
-            ("股东权益合计", "TOTAL_EQUITY"),
-            ("负债和股东权益合计", "TOTAL_LIAB_EQUITY"),
+            ("股本", ["SHARE_CAPITAL", "CAPITAL_STOCK"]),
+            ("资本公积", ["CAPITAL_RESERVE"]),
+            ("盈余公积", ["SURPLUS_RESERVE"]),
+            ("未分配利润", ["UNASSIGN_RPOFIT", "UNALLOCATED_PROFIT"]),
+            ("其他综合收益", ["OTHER_COMPRE_INCOME"]),
+            ("归属于母公司股东权益合计", ["TOTAL_PARENT_EQUITY"]),
+            ("少数股东权益", ["MINORITY_EQUITY"]),
+            ("股东权益合计", ["TOTAL_EQUITY"]),
+            ("负债和股东权益合计", ["TOTAL_LIAB_EQUITY", "TOTAL_ASSETS"]),
         ]
     },
 ]
@@ -433,13 +437,14 @@ def _build_report_table(
     dates = [str(r.report_date) for r in reports]
     names = [r.report_name for r in reports]
 
-    # EPS字段名集合，这些不需要除以万元
     eps_keys = {"BASIC_EPS", "DILUTED_EPS"}
 
     result_sections = []
     for group in groups:
         items = []
-        for label, key in group["fields"]:
+        for label, keys in group["fields"]:
+            if isinstance(keys, str):
+                keys = [keys]
             values = []
             for i, dt in enumerate(dates):
                 r = date_to_report.get(dt)
@@ -447,9 +452,13 @@ def _build_report_table(
                     values.append(None)
                     continue
                 raw = getattr(r, json_field) or {}
-                val = _em_value(raw, key, is_eps=(key in eps_keys)) if key else None
+                val = None
+                for key in keys:
+                    val = _em_value(raw, key, is_eps=(key in eps_keys))
+                    if val is not None:
+                        break
                 values.append(val)
-            items.append({"name": label, "key": key or f"row_{len(items)}", "values": values})
+            items.append({"name": label, "key": keys[0] or f"row_{len(items)}", "values": values})
         result_sections.append({"name": group["name"], "items": items})
 
     return success_response({
