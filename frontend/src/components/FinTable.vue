@@ -7,13 +7,27 @@
           <a-radio-button value="report">按报告期</a-radio-button>
         </a-radio-group>
       </div>
-      <div class="period-select">
-        <span class="period-label">显示期数：</span>
-        <a-select v-model:value="quarters" size="small" style="width: 100px" @change="loadData">
-          <a-select-option :value="4">4期</a-select-option>
-          <a-select-option :value="8">8期</a-select-option>
-          <a-select-option :value="12">12期</a-select-option>
-        </a-select>
+      <div class="period-pager">
+        <span class="period-label">报告期：</span>
+        <a-button
+          type="text"
+          size="small"
+          :disabled="!canGoEarlier"
+          @click="goEarlier"
+        >
+          <template #icon><left-outlined /></template>
+          更早
+        </a-button>
+        <span class="current-period">{{ currentPeriodText }}</span>
+        <a-button
+          type="text"
+          size="small"
+          :disabled="!canGoLater"
+          @click="goLater"
+        >
+          更新
+          <template #icon><right-outlined /></template>
+        </a-button>
       </div>
     </div>
 
@@ -64,7 +78,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
+import { LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 
 interface TableItem {
   name: string
@@ -93,23 +108,73 @@ const props = defineProps<{
 
 const loading = ref(false)
 const currentView = ref('report')
-const quarters = ref(8)
+// 窗口大小：每次显示的期数
+const windowSize = ref(6)
+// 窗口起始索引（0表示最新一期）
+const startIdx = ref(0)
+// 所有报告期（从后端加载）
+const allReportDates = ref<string[]>([])
+const allReportNames = ref<string[]>([])
 const reportDates = ref<string[]>([])
 const sections = ref<TableSection[]>([])
 
+const canGoEarlier = computed(() => startIdx.value + windowSize.value < allReportDates.value.length)
+const canGoLater = computed(() => startIdx.value > 0)
+
+const currentPeriodText = computed(() => {
+  if (!reportDates.value.length) return '-'
+  const first = reportDates.value[0]
+  const last = reportDates.value[reportDates.value.length - 1]
+  return `${formatDate(first)} ~ ${formatDate(last)}`
+})
+
+function goEarlier() {
+  if (canGoEarlier.value) {
+    startIdx.value += 1
+    loadData()
+  }
+}
+
+function goLater() {
+  if (canGoLater.value) {
+    startIdx.value = Math.max(0, startIdx.value - 1)
+    loadData()
+  }
+}
+
 async function loadData() {
+  if (!props.stockCode) return
   loading.value = true
   try {
-    const res = await props.fetchData(props.stockCode, currentView.value, quarters.value)
+    // 请求足够多的期数，然后前端切片
+    const limit = startIdx.value + windowSize.value
+    const res = await props.fetchData(props.stockCode, currentView.value, limit)
     if (res.code === 0 && res.data) {
-      reportDates.value = res.data.report_dates || []
-      sections.value = res.data.sections || []
+      allReportDates.value = res.data.report_dates || []
+      allReportNames.value = res.data.report_names || []
+      // 切片：从 startIdx 开始取 windowSize 个
+      const end = Math.min(startIdx.value + windowSize.value, allReportDates.value.length)
+      reportDates.value = allReportDates.value.slice(startIdx.value, end)
+      // 同时切片 sections 里的 values
+      const sliced = (res.data.sections || []).map((sec: TableSection) => ({
+        name: sec.name,
+        items: sec.items.map((item) => ({
+          name: item.name,
+          key: item.key,
+          values: item.values.slice(startIdx.value, end),
+        })),
+      }))
+      sections.value = sliced
     } else {
+      allReportDates.value = []
+      allReportNames.value = []
       reportDates.value = []
       sections.value = []
     }
   } catch (e) {
     console.error(e)
+    allReportDates.value = []
+    allReportNames.value = []
     reportDates.value = []
     sections.value = []
   } finally {
@@ -192,6 +257,7 @@ function isTotalRow(name: string): boolean {
 
 watch(() => props.stockCode, () => {
   if (props.stockCode) {
+    startIdx.value = 0
     loadData()
   }
 }, { immediate: true })
@@ -211,9 +277,27 @@ watch(() => props.stockCode, () => {
   border-bottom: 1px solid #f0f0f0;
 }
 
+.period-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .period-label {
   font-size: 13px;
   color: #666;
+}
+
+.current-period {
+  display: inline-block;
+  min-width: 180px;
+  text-align: center;
+  font-size: 13px;
+  color: #1d4ed8;
+  font-weight: 600;
+  padding: 4px 8px;
+  background: #f0f7ff;
+  border-radius: 4px;
 }
 
 .fin-table-container {

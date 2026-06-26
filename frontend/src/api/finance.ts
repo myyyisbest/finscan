@@ -98,25 +98,48 @@ export const stockApi = {
 }
 
 export const financeApi = {
-  getMainIndicators: (code: string, view = 'report', quarters = 8) =>
+  getMainIndicators: (code: string, view = 'report', quarters = 6) =>
     api.get<{ code: number; data: MainIndicatorsData }>(
       `/api/v1/finance/${code}/main-indicators?view=${view}&quarters=${quarters}`
     ),
 
-  getBalanceSheet: (code: string, view = 'report', quarters = 8, reportType?: string) =>
+  getBalanceSheet: (code: string, view = 'report', quarters = 6, reportType?: string) =>
     api.get<{ code: number; data: FinTableData }>(
       `/api/v1/finance/${code}/balance-sheet?view=${view}&quarters=${quarters}${reportType ? `&report_type=${reportType}` : ''}`
     ),
 
-  getIncomeStatement: (code: string, view = 'report', quarters = 8, reportType?: string) =>
+  getIncomeStatement: (code: string, view = 'report', quarters = 6, reportType?: string) =>
     api.get<{ code: number; data: FinTableData }>(
       `/api/v1/finance/${code}/income-statement?view=${view}&quarters=${quarters}${reportType ? `&report_type=${reportType}` : ''}`
     ),
 
-  getCashFlow: (code: string, view = 'report', quarters = 8, reportType?: string) =>
+  getCashFlow: (code: string, view = 'report', quarters = 6, reportType?: string) =>
     api.get<{ code: number; data: FinTableData }>(
       `/api/v1/finance/${code}/cash-flow?view=${view}&quarters=${quarters}${reportType ? `&report_type=${reportType}` : ''}`
     ),
+
+  getDupont: (code: string, quarters = 6) =>
+    api.get<{ code: number; data: DupontData }>(
+      `/api/v1/finance/${code}/dupont?quarters=${quarters}`
+    ),
+}
+
+export interface DupontNode {
+  name: string
+  key: string
+  value: number | null
+  history: (number | null)[]
+  yoy: number | null
+  unit: string
+  formula: string
+  is_pct: boolean
+  children: DupontNode[]
+}
+
+export interface DupontData {
+  report_dates: string[]
+  report_names: string[]
+  nodes: DupontNode[]
 }
 
 export const watchlistApi = {

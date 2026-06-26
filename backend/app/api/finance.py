@@ -514,3 +514,217 @@ def _em_value(raw: dict, key: str, is_eps: bool = False):
         return fv if not is_eps else round(fv, 4)
     except (ValueError, TypeError):
         return None
+
+
+# ===================== 杜邦分析 =====================
+
+@router.get("/{code}/dupont")
+def get_dupont_analysis(
+    code: str,
+    quarters: int = Query(6, ge=1, le=12),
+    db: Session = Depends(get_db),
+):
+    """杜邦分析树形结构数据。
+
+    树形结构：ROE = 销售净利率 × 总资产周转率 × 权益乘数
+    每个节点包含: name(名称)、value(当前值)、unit(单位)、formula(公式)、
+                  history(近N期值数组)、yoy(同比变化)、children(子节点)
+    """
+    code = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+
+    # 获取资产负债表和利润表数据
+    reports = db.query(FinReport).filter(
+        FinReport.stock_code == code
+    ).order_by(FinReport.report_date.desc()).limit(quarters).all()
+
+    if not reports:
+        return success_response({
+            "report_dates": [],
+            "nodes": []
+        })
+
+    dates = [str(r.report_date) for r in reports]
+
+    def gv(raw, *keys):
+        """从JSON中按优先级取值"""
+        if not raw:
+            return None
+        for k in keys:
+            v = _em_value(raw, k)
+            if v is not None:
+                return v
+        return None
+
+    def to_pct(v, decimals=2):
+        """转为百分比"""
+        if v is None:
+            return None
+        return round(v * 100, decimals)
+
+    def build_node(name, key, current, history, unit, formula="", children=None, is_pct=False):
+        """构建一个节点"""
+        yoy = None
+        if len(history) >= 2 and history[-2] not in (None, 0):
+            yoy = round((history[-1] - history[-2]) / abs(history[-2]) * 100, 2)
+        return {
+            "name": name,
+            "key": key,
+            "value": current,
+            "history": history,
+            "yoy": yoy,
+            "unit": unit,
+            "formula": formula,
+            "is_pct": is_pct,
+            "children": children or []
+        }
+
+    # 按时间正序计算（早→晚）
+    reports_asc = list(reversed(reports))
+    bs_list = [r.balance_json or {} for r in reports_asc]
+    is_list = [r.income_json or {} for r in reports_asc]
+
+    n = len(reports_asc)
+    # 各指标历史值
+    rev_list = [gv(is_, "OPERATE_INCOME", "TOTAL_OPERATE_INCOME") for is_ in is_list]
+    cost_list = [gv(is_, "OPERATE_COST") for is_ in is_list]
+    np_list = [gv(is_, "PARENT_NETPROFIT", "NETPROFIT") for is_ in is_list]
+    total_np_list = [gv(is_, "NETPROFIT") for is_ in is_list]
+    sale_exp_list = [gv(is_, "SALE_EXPENSE") for is_ in is_list]
+    manage_exp_list = [gv(is_, "MANAGE_EXPENSE") for is_ in is_list]
+    rd_exp_list = [gv(is_, "RESEARCH_EXPENSE", "ME_RESEARCH_EXPENSE") for is_ in is_list]
+    fin_exp_list = [gv(is_, "FINANCE_EXPENSE") for is_ in is_list]
+    tax_list = [gv(is_, "OPERATE_TAX_ADD") for is_ in is_list]
+    income_tax_list = [gv(is_, "INCOME_TAX", "INCOME_TAX_EXPENSE") for is_ in is_list]
+    total_profit_list = [gv(is_, "TOTAL_PROFIT") for is_ in is_list]
+
+    # 资产负债表字段
+    total_assets_list = [gv(bs, "TOTAL_ASSETS") for bs in bs_list]
+    total_liab_list = [gv(bs, "TOTAL_LIABILITIES", "TOTAL_LIAB") for bs in bs_list]
+    total_equity_list = [gv(bs, "TOTAL_EQUITY") for bs in bs_list]
+    current_assets_list = [gv(bs, "TOTAL_CURRENT_ASSETS") for bs in bs_list]
+    noncurrent_assets_list = [gv(bs, "TOTAL_NONCURRENT_ASSETS") for bs in bs_list]
+    current_liab_list = [gv(bs, "TOTAL_CURRENT_LIAB") for bs in bs_list]
+    inventory_list = [gv(bs, "INVENTORY") for bs in bs_list]
+    ar_list = [gv(bs, "ACCOUNTS_RECE", "ACCOUNTS_RECEIVABLE") for bs in bs_list]
+
+    def safe_ratio(num, den, pct=True):
+        if num is None or den is None or den == 0:
+            return None
+        v = num / den
+        return v * 100 if pct else v
+
+    def safe_diff(a, b, pct=True):
+        if a is None or b is None:
+            return None
+        v = a - b
+        return v * 100 if pct else v
+
+    # 各级指标历史
+    def make_history(pct, *lists):
+        """根据多个等长列表逐项计算比值。pct: 是否转百分比"""
+        result = []
+        for items in zip(*lists):
+            args = list(items) + [pct]
+            result.append(safe_ratio(*args))
+        return result
+
+    # 顶层：ROE（净资产收益率，单位%）
+    roe_hist = make_history(True, np_list, total_equity_list)
+    # 销售净利率（%）
+    npm_hist = make_history(True, np_list, rev_list)
+    # 总资产周转率（次），不*100
+    tat_hist = make_history(False, rev_list, total_assets_list)
+    # 权益乘数（倍），不*100
+    em_hist = make_history(False, total_assets_list, total_equity_list)
+
+    # 销售净利率拆解
+    gpm_hist = make_history(True, [r - c if r and c else None for r, c in zip(rev_list, cost_list)], rev_list)
+    sale_rate_hist = make_history(True, sale_exp_list, rev_list)
+    manage_rate_hist = make_history(True, manage_exp_list, rev_list)
+    rd_rate_hist = make_history(True, rd_exp_list, rev_list)
+    fin_rate_hist = make_history(True, fin_exp_list, rev_list)
+    tax_rate_hist = make_history(True, income_tax_list, total_profit_list)
+
+    # 总资产周转率拆解
+    cat_hist = make_history(False, rev_list, current_assets_list)
+    ncat_hist = make_history(False, rev_list, noncurrent_assets_list)
+
+    # 权益乘数拆解
+    dr_hist = make_history(True, total_liab_list, total_assets_list)
+
+    # 资产侧
+    inv_turnover_hist = make_history(False, cost_list, inventory_list)
+    ar_turnover_hist = make_history(False, rev_list, ar_list)
+    cash_hist = [gv(bs, "MONETARYFUNDS") for bs in bs_list]
+    cash_rate_hist = make_history(True, cash_hist, total_assets_list)
+
+    # 取最新值
+    def last(h):
+        return h[-1] if h else None
+
+    # 构建子节点
+    npm_children = [
+        build_node("毛利率", "gross_margin", last(gpm_hist), gpm_hist, "%",
+                   "(营业收入-营业成本)/营业收入", is_pct=True),
+        build_node("销售费用率", "sale_rate", last(sale_rate_hist), sale_rate_hist, "%",
+                   "销售费用/营业收入", is_pct=True),
+        build_node("管理费用率", "manage_rate", last(manage_rate_hist), manage_rate_hist, "%",
+                   "管理费用/营业收入", is_pct=True),
+        build_node("研发费用率", "rd_rate", last(rd_rate_hist), rd_rate_hist, "%",
+                   "研发费用/营业收入", is_pct=True),
+        build_node("财务费用率", "fin_rate", last(fin_rate_hist), fin_rate_hist, "%",
+                   "财务费用/营业收入", is_pct=True),
+        build_node("实际所得税率", "tax_rate", last(tax_rate_hist), tax_rate_hist, "%",
+                   "所得税/利润总额", is_pct=True),
+    ]
+
+    tat_children = [
+        build_node("流动资产周转率", "current_at", last(cat_hist), cat_hist, "次",
+                   "营业收入/流动资产"),
+        build_node("非流动资产周转率", "noncurrent_at", last(ncat_hist), ncat_hist, "次",
+                   "营业收入/非流动资产"),
+    ]
+
+    em_children = [
+        build_node("资产负债率", "debt_ratio", last(dr_hist), dr_hist, "%",
+                   "总负债/总资产", is_pct=True),
+        build_node("1-资产负债率", "one_minus_dr",
+                   round(100 - last(dr_hist), 2) if last(dr_hist) is not None else None,
+                   [round(100 - v, 2) if v is not None else None for v in dr_hist], "%",
+                   "1-资产负债率", is_pct=True),
+    ]
+
+    # 顶部ROE节点
+    roe_node = build_node(
+        "ROE 净资产收益率", "roe", last(roe_hist), roe_hist, "%",
+        "销售净利率 × 总资产周转率 × 权益乘数",
+        children=[
+            build_node("销售净利率", "net_margin", last(npm_hist), npm_hist, "%",
+                       "净利润/营业收入", npm_children, is_pct=True),
+            build_node("总资产周转率", "asset_turnover", last(tat_hist), tat_hist, "次",
+                       "营业收入/总资产", tat_children),
+            build_node("权益乘数", "equity_multiplier", last(em_hist), em_hist, "倍",
+                       "总资产/股东权益", em_children),
+        ],
+        is_pct=True
+    )
+
+    # 资产质量节点
+    asset_quality = build_node(
+        "资产质量", "asset_quality", None, [], "",
+        "辅助分析",
+        children=[
+            build_node("存货周转率", "inv_turnover", last(inv_turnover_hist),
+                       inv_turnover_hist, "次", "营业成本/存货"),
+            build_node("应收账款周转率", "ar_turnover", last(ar_turnover_hist),
+                       ar_turnover_hist, "次", "营业收入/应收账款"),
+            build_node("货币资金占总资产比", "cash_rate", last(cash_rate_hist),
+                       cash_rate_hist, "%", "货币资金/总资产", is_pct=True),
+        ]
+    )
+
+    return success_response({
+        "report_dates": dates,
+        "report_names": [r.report_name for r in reports],
+        "nodes": [roe_node, asset_quality]
+    })

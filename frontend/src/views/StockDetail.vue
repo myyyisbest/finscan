@@ -77,6 +77,7 @@ const isInWatchlist = ref(false)
 
 const mainTabs = [
   { name: '主要指标', path: `/stock/${stockCode.value}/main-indicators` },
+  { name: '杜邦分析', path: `/stock/${stockCode.value}/dupont-analysis` },
   { name: '资产负债表', path: `/stock/${stockCode.value}/balance-sheet` },
   { name: '利润表', path: `/stock/${stockCode.value}/income-statement` },
   { name: '现金流量表', path: `/stock/${stockCode.value}/cash-flow` },
@@ -85,6 +86,7 @@ const mainTabs = [
 
 const financeSubTabs = computed(() => [
   { name: '主要指标', path: `/stock/${stockCode.value}/main-indicators` },
+  { name: '杜邦分析', path: `/stock/${stockCode.value}/dupont-analysis` },
   { name: '资产负债表', path: `/stock/${stockCode.value}/balance-sheet` },
   { name: '利润表', path: `/stock/${stockCode.value}/income-statement` },
   { name: '现金流量表', path: `/stock/${stockCode.value}/cash-flow` },
@@ -107,7 +109,7 @@ async function loadStockInfo() {
       stockInfo.value = res.data
       // 更新tab路径
       mainTabs.forEach((tab, i) => {
-        const basePath = ['main-indicators', 'balance-sheet', 'income-statement', 'cash-flow', 'announcements'][i]
+        const basePath = ['main-indicators', 'dupont-analysis', 'balance-sheet', 'income-statement', 'cash-flow', 'announcements'][i]
         tab.path = `/stock/${stockCode.value}/${basePath}`
       })
     }

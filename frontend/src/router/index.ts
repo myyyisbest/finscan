@@ -30,6 +30,11 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/finance/MainIndicators.vue')
           },
           {
+            path: 'dupont-analysis',
+            name: 'DupontAnalysis',
+            component: () => import('@/views/finance/DupontAnalysis.vue')
+          },
+          {
             path: 'balance-sheet',
             name: 'BalanceSheet',
             component: () => import('@/views/finance/BalanceSheet.vue')
