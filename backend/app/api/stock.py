@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
+import pandas as pd
 
 from app.db import get_db
 from app.core.response import success_response, fail_response
@@ -113,18 +114,18 @@ def get_report_dates(
 
 @router.get("/{code}/profile")
 def get_stock_profile(code: str, db: Session = Depends(get_db)):
-    """获取公司简介：调用akshare的stock_individual_basic_info_xq接口。
+    """获取公司简介 + 最新公告：调用akshare的雪球简介接口和巨潮公告接口。
 
-    返回字段：org_id/cnsp_id/org_name_cn/org_name_en/org_short_name_cn/org_short_name_en/
-    currency/listed_date/raised_capital/established_date/actual_controller/actual_controller_amount/
-    classi_name/pre_name/main_business/business_scope/office_address/org_website/org_telephone/
-    org_email/reg_address/reg_capital/enterprise_type/legal_rep/secretary/province/city/area/
-    employees_number/main_holders_count/main_business_scope/description/...
+    返回字段：
+    - basic: 数据库中的基础信息
+    - profile: 雪球公司简介（如可用）
+    - announcements: 最新公告列表（来自巨潮 cninfo）
+    - error: 错误信息
     """
     code_clean = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
     xq_symbol = _get_xq_symbol(code_clean)
 
-    # 先从数据库获取基础信息（保证一定有数据）
+    # 数据库基础信息
     stock = db.query(StockBasic).filter(StockBasic.stock_code == code_clean).first()
     basic_info = {
         "stock_code": stock.stock_code if stock else code_clean,
@@ -135,28 +136,59 @@ def get_stock_profile(code: str, db: Session = Depends(get_db)):
         "list_date": str(stock.list_date) if stock and stock.list_date else None,
     }
 
-    # 调用akshare获取公司简介
+    # 1) 雪球公司简介
     profile_data = None
-    error_msg = None
+    profile_error = None
     try:
         import akshare as ak
         df = ak.stock_individual_basic_info_xq(symbol=xq_symbol)
         if df is not None and len(df) > 0:
-            # 转换为 {字段: 值} 的字典
             profile_data = dict(zip(df.iloc[:, 0].tolist(), df.iloc[:, 1].tolist()))
     except Exception as e:
-        error_msg = str(e)
+        profile_error = str(e)
         log.warning("akshare stock_individual_basic_info_xq 失败: %s", e)
 
-    if not profile_data:
-        return success_response({
-            "basic": basic_info,
-            "profile": None,
-            "error": error_msg or "akshare接口暂不可用",
-        })
+    # 2) 巨潮公告（最近90天）
+    announcements = []
+    announce_error = None
+    try:
+        import akshare as ak
+        from datetime import datetime, timedelta
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=90)).strftime("%Y%m%d")
+        # 使用新版本akshare接口（用户给的stock_cninfo在新版已重命名）
+        df_ann = ak.stock_zh_a_disclosure_report_cninfo(
+            symbol=code_clean,
+            market="沪深京",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if df_ann is not None and len(df_ann) > 0:
+            # 按公告时间倒序
+            df_ann = df_ann.sort_values("公告时间", ascending=False)
+            for _, row in df_ann.head(20).iterrows():
+                ann_time = row.get("公告时间", "")
+                ann_time_str = ""
+                if ann_time is not None and str(ann_time) != "nan":
+                    try:
+                        ann_time_str = pd.Timestamp(ann_time).strftime("%Y-%m-%d")
+                    except Exception:
+                        ann_time_str = str(ann_time)[:10]
+                announcements.append({
+                    "title": str(row.get("公告标题", "")),
+                    "date": ann_time_str,
+                    "time": str(ann_time) if ann_time is not None else "",
+                    "sec_name": str(row.get("简称", "")),
+                    "url": str(row.get("公告链接", "")),
+                })
+    except Exception as e:
+        announce_error = str(e)
+        log.warning("akshare stock_zh_a_disclosure_report_cninfo 失败: %s", e)
 
     return success_response({
         "basic": basic_info,
         "profile": profile_data,
-        "error": None,
+        "profile_error": profile_error,
+        "announcements": announcements,
+        "announce_error": announce_error,
     })
