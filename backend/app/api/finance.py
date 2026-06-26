@@ -65,24 +65,36 @@ def get_main_indicators(
 ):
     """主要财务指标（东财主要指标页）。
 
-    从FinReport的提取列构建指标表格，保持元为单位。
+    从FinMainIndicator表读取原始JSON数据，按东财格式组织返回。
     """
-    reports = _get_reports(db, code, None, quarters)
-    if not reports:
+    code = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+    query = db.query(FinMainIndicator).filter(FinMainIndicator.stock_code == code)
+    indicators = query.order_by(FinMainIndicator.report_date.desc()).limit(quarters).all()
+
+    if not indicators:
         return success_response({
             "report_dates": [],
             "report_names": [],
             "sections": []
         })
 
-    dates = [str(r.report_date) for r in reports]
-    names = [r.report_name for r in reports]
+    # 从原始JSON提取数据
+    def get_val(raw, key):
+        if raw is None:
+            return None
+        v = raw.get(key)
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return None
 
-    def col(fn):
-        return [fn(r) for r in reports]
+    dates = [str(ind.report_date) for ind in indicators]
+    names = [ind.raw_json.get("REPORT_TYPE", "") for ind in indicators]
 
-    def f(v):
-        return float(v) if v is not None else None
+    def col(key):
+        return [get_val(ind.raw_json, key) for ind in indicators]
 
     data = {
         "report_dates": dates,
@@ -91,56 +103,64 @@ def get_main_indicators(
             {
                 "name": "每股指标",
                 "items": [
-                    {"name": "基本每股收益(元)", "key": "eps", "values": col(lambda r: f(r.eps))},
-                    {"name": "每股净资产(元)", "key": "bps", "values": col(lambda r: f(r.bps))},
-                    {"name": "每股资本公积(元)", "key": "capital_reserve_ps", "values": col(lambda r: f(r.capital_reserve_ps))},
-                    {"name": "每股未分配利润(元)", "key": "undistr_profit_ps", "values": col(lambda r: f(r.undistr_profit_ps))},
-                    {"name": "每股经营现金流(元)", "key": "operate_cash_ps",
-                     "values": col(lambda r: _calc_cash_ps(r))},
+                    {"name": "基本每股收益(元)", "key": "EPSJB", "values": col("EPSJB")},
+                    {"name": "每股净资产(元)", "key": "BPS", "values": col("BPS")},
+                    {"name": "每股资本公积(元)", "key": "MGZBGJ", "values": col("MGZBGJ")},
+                    {"name": "每股未分配利润(元)", "key": "MGWFPLR", "values": col("MGWFPLR")},
+                    {"name": "每股经营现金流(元)", "key": "MGJYXJJE", "values": col("MGJYXJJE")},
                 ]
             },
             {
                 "name": "盈利能力",
                 "items": [
-                    {"name": "净资产收益率ROE(%)", "key": "roe", "values": col(lambda r: f(r.roe))},
-                    {"name": "总资产收益率ROA(%)", "key": "roa", "values": col(lambda r: f(r.roa))},
-                    {"name": "销售毛利率(%)", "key": "gross_margin", "values": col(lambda r: f(r.gross_margin))},
-                    {"name": "销售净利率(%)", "key": "net_margin", "values": col(lambda r: f(r.net_margin))},
+                    {"name": "净资产收益率ROE(%)", "key": "ROEJQ", "values": col("ROEJQ")},
+                    {"name": "总资产收益率ROA(%)", "key": "ZZCJLL", "values": col("ZZCJLL")},
+                    {"name": "销售毛利率(%)", "key": "XSMLL", "values": col("XSMLL")},
+                    {"name": "销售净利率(%)", "key": "XSJLL", "values": col("XSJLL")},
                 ]
             },
             {
                 "name": "成长能力",
                 "items": [
-                    {"name": "营业总收入同比增长率(%)", "key": "revenue_yoy", "values": col(lambda r: f(r.revenue_yoy))},
-                    {"name": "归母净利润同比增长率(%)", "key": "net_profit_yoy", "values": col(lambda r: f(r.net_profit_yoy))},
-                    {"name": "总资产同比增长率(%)", "key": "assets_yoy", "values": col(lambda r: f(r.assets_yoy))},
+                    {"name": "营业总收入同比增长率(%)", "key": "TOTALOPERATEREVETZ", "values": col("TOTALOPERATEREVETZ")},
+                    {"name": "归母净利润同比增长率(%)", "key": "PARENTNETPROFITTZ", "values": col("PARENTNETPROFITTZ")},
+                    {"name": "扣非净利润同比增长率(%)", "key": "KCFJCXSYJLRTZ", "values": col("KCFJCXSYJLRTZ")},
                 ]
             },
             {
                 "name": "偿债能力",
                 "items": [
-                    {"name": "资产负债率(%)", "key": "debt_ratio", "values": col(lambda r: f(r.debt_ratio))},
-                    {"name": "流动比率", "key": "current_ratio", "values": col(lambda r: f(r.current_ratio))},
-                    {"name": "速动比率", "key": "quick_ratio", "values": col(lambda r: f(r.quick_ratio))},
+                    {"name": "资产负债率(%)", "key": "ZCFZL", "values": col("ZCFZL")},
+                    {"name": "流动比率", "key": "LD", "values": col("LD")},
+                    {"name": "速动比率", "key": "SD", "values": col("SD")},
+                    {"name": "现金流动负债比", "key": "XJLLB", "values": col("XJLLB")},
+                ]
+            },
+            {
+                "name": "运营能力",
+                "items": [
+                    {"name": "总资产周转天数", "key": "ZZCZZTS", "values": col("ZZCZZTS")},
+                    {"name": "存货周转天数", "key": "CHZZTS", "values": col("CHZZTS")},
+                    {"name": "应收账款周转天数", "key": "YSZKZZTS", "values": col("YSZKZZTS")},
+                    {"name": "总资产周转率", "key": "TOAZZL", "values": col("TOAZZL")},
+                    {"name": "存货周转率", "key": "CHZZL", "values": col("CHZZL")},
                 ]
             },
             {
                 "name": "利润表关键科目",
                 "items": [
-                    {"name": "营业总收入", "key": "total_revenue", "values": col(lambda r: f(r.total_revenue))},
-                    {"name": "营业利润", "key": "operate_profit", "values": col(lambda r: f(r.operate_profit))},
-                    {"name": "利润总额", "key": "total_profit", "values": col(lambda r: f(r.total_profit))},
-                    {"name": "归母净利润", "key": "net_profit_parent", "values": col(lambda r: f(r.net_profit_parent))},
-                    {"name": "扣非净利润", "key": "deduct_net_profit", "values": col(lambda r: f(r.deduct_net_profit))},
-                    {"name": "经营活动现金流净额", "key": "operate_cash_net", "values": col(lambda r: f(r.operate_cash_net))},
+                    {"name": "营业总收入", "key": "TOTALOPERATEREVE", "values": col("TOTALOPERATEREVE")},
+                    {"name": "毛利", "key": "MLR", "values": col("MLR")},
+                    {"name": "归母净利润", "key": "PARENTNETPROFIT", "values": col("PARENTNETPROFIT")},
+                    {"name": "扣非净利润", "key": "KCFJCXSYJLR", "values": col("KCFJCXSYJLR")},
                 ]
             },
             {
-                "name": "资产负债表关键科目",
+                "name": "资产负债关键科目",
                 "items": [
-                    {"name": "总资产", "key": "total_assets", "values": col(lambda r: f(r.total_assets))},
-                    {"name": "总负债", "key": "total_liabilities", "values": col(lambda r: f(r.total_liabilities))},
-                    {"name": "股东权益合计", "key": "total_equity", "values": col(lambda r: f(r.total_equity))},
+                    {"name": "总资产", "key": "TOTAL_ASSETS", "values": col("TOTAL_ASSETS")},
+                    {"name": "总负债", "key": "TOTAL_LIABILITIES", "values": col("TOTAL_LIABILITIES")},
+                    {"name": "股东权益合计", "key": "TOTAL_EQUITY", "values": col("TOTAL_EQUITY")},
                 ]
             },
         ]
