@@ -25,4 +25,7 @@ export interface LoginResponse {
 export const authApi = {
   login: (username: string, password: string) =>
     api.post<LoginResponse>('/api/v1/auth/login', { username, password }),
+
+  guest: () =>
+    api.post<LoginResponse>('/api/v1/auth/guest'),
 }

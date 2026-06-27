@@ -64,6 +64,32 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
     })
 
 
+@router.post("/guest")
+def guest_login(db: Session = Depends(get_db)):
+    """游客登录：自动创建/使用guest账号，免密码直接登录。"""
+    user = db.query(User).filter(User.username == "guest").first()
+    if user is None:
+        user = User(
+            username="guest",
+            hashed_password=hash_password("guest123"),
+            is_active=True,
+            is_admin=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    if not user.is_active:
+        raise AuthError("游客账号已禁用")
+    token = create_access_token(user.id)
+    return ok({
+        "access_token": token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin,
+    })
+
+
 @router.get("/me")
 def get_me(user: User = Depends(get_current_user)):
     return ok({

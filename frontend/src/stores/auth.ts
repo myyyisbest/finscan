@@ -24,6 +24,22 @@ export const useAuthStore = defineStore('auth', () => {
     return false
   }
 
+  async function loginAsGuest() {
+    const res = await authApi.guest()
+    if (res.code === 0 && res.data) {
+      token.value = res.data.access_token
+      username.value = res.data.username
+      userId.value = res.data.user_id
+      isAdmin.value = res.data.is_admin
+      localStorage.setItem('token', res.data.access_token)
+      localStorage.setItem('username', res.data.username)
+      localStorage.setItem('user_id', String(res.data.user_id))
+      localStorage.setItem('is_admin', String(res.data.is_admin))
+      return true
+    }
+    return false
+  }
+
   function logout() {
     token.value = null
     username.value = ''
@@ -35,5 +51,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('is_admin')
   }
 
-  return { token, username, userId, isAdmin, login, logout }
+  return { token, username, userId, isAdmin, login, loginAsGuest, logout }
 })
