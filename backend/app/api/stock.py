@@ -2,8 +2,10 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+from functools import lru_cache
 import logging
 import pandas as pd
+import time
 
 from app.db import get_db
 from app.core.response import success_response, fail_response
@@ -12,6 +14,39 @@ from app.models import StockBasic, FinReport
 router = APIRouter(prefix="/api/v1/stock", tags=["stock"])
 
 log = logging.getLogger(__name__)
+
+# A股股票列表缓存（代码->名称映射）
+_stock_list_cache = None
+_stock_list_cache_time = 0
+_CACHE_TTL = 3600  # 缓存1小时
+
+
+def _get_all_stocks():
+    """获取所有A股列表，带缓存。"""
+    global _stock_list_cache, _stock_list_cache_time
+    now = time.time()
+    if _stock_list_cache is not None and (now - _stock_list_cache_time) < _CACHE_TTL:
+        return _stock_list_cache
+
+    try:
+        import akshare as ak
+        df = ak.stock_info_a_code_name()
+        if df is not None and len(df) > 0:
+            stocks = []
+            for _, row in df.iterrows():
+                code = str(row.get('code', '')).zfill(6)
+                name = str(row.get('name', ''))
+                if len(code) == 6 and code.isdigit() and name and name != 'nan':
+                    stocks.append((code, name))
+            _stock_list_cache = stocks
+            _stock_list_cache_time = now
+            log.info("加载A股列表缓存: %d 只股票", len(stocks))
+            return stocks
+    except Exception as e:
+        log.warning("获取A股列表失败: %s", e)
+
+    # 失败则返回空
+    return []
 
 
 def _detect_market(code: str) -> str:
@@ -36,10 +71,10 @@ def search_stock(
     keyword: str = Query(..., min_length=1, description="搜索关键词（代码或名称）"),
     db: Session = Depends(get_db),
 ):
-    """搜索股票：先查本地数据库，没有则通过akshare实时搜索并入库。"""
+    """搜索股票：优先从akshare全量A股列表搜索，结果自动入库。"""
     kw = keyword.strip()
 
-    # 先查本地数据库
+    # 先查本地数据库（快速返回已有数据）
     query = db.query(StockBasic)
     if kw.isdigit():
         local_results = query.filter(StockBasic.stock_code.like(f"%{kw}%")).limit(20).all()
@@ -59,54 +94,44 @@ def search_stock(
             "industry": s.industry,
         } for s in local_results])
 
-    # 本地无结果，通过akshare实时搜索
-    try:
-        import akshare as ak
-        # 使用沪深京A股列表接口获取所有股票列表进行搜索
-        df = ak.stock_zh_a_spot_em()
-        if df is not None and len(df) > 0:
-            # 过滤匹配的结果
+    # 本地没有，从akshare全量列表搜索
+    all_stocks = _get_all_stocks()
+    matched = []
+    if all_stocks:
+        for code, name in all_stocks:
             if kw.isdigit():
-                matched = df[df['代码'].astype(str).str.contains(kw, na=False)].head(20)
+                if kw in code:
+                    matched.append((code, name))
             else:
-                matched = df[
-                    df['名称'].astype(str).str.contains(kw, na=False) |
-                    df['代码'].astype(str).str.contains(kw, na=False)
-                ].head(20)
+                if kw in name or kw in code:
+                    matched.append((code, name))
+            if len(matched) >= 20:
+                break
 
-            results = []
-            for _, row in matched.iterrows():
-                code = str(row.get('代码', ''))
-                name = str(row.get('名称', ''))
-                industry = str(row.get('所属行业', '')) if '所属行业' in row else None
-                if industry == 'nan':
-                    industry = None
-
-                # 自动入库到stock_basic
-                existing = db.query(StockBasic).filter(StockBasic.stock_code == code).first()
-                if not existing:
-                    market = _detect_market(code)
-                    s = StockBasic(
-                        stock_code=code,
-                        market=market,
-                        secucode=f"{market}{code}",
-                        stock_name=name,
-                        industry=industry,
-                    )
-                    db.add(s)
-
-                results.append({
-                    "stock_code": code,
-                    "stock_name": name,
-                    "market": _detect_market(code),
-                    "secucode": f"{_detect_market(code)}{code}",
-                    "industry": industry,
-                })
-
-            db.commit()
-            return success_response(results)
-    except Exception as e:
-        log.warning("akshare 搜索失败: %s", e)
+    if matched:
+        results = []
+        for code, name in matched:
+            # 自动入库
+            existing = db.query(StockBasic).filter(StockBasic.stock_code == code).first()
+            if not existing:
+                market = _detect_market(code)
+                s = StockBasic(
+                    stock_code=code,
+                    market=market,
+                    secucode=f"{market}{code}",
+                    stock_name=name,
+                )
+                db.add(s)
+            market = _detect_market(code)
+            results.append({
+                "stock_code": code,
+                "stock_name": name,
+                "market": market,
+                "secucode": f"{market}{code}",
+                "industry": None,
+            })
+        db.commit()
+        return success_response(results)
 
     return success_response([])
 

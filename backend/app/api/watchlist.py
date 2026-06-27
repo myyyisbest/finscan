@@ -121,7 +121,7 @@ def add_stock(
     """添加股票到自选。"""
     code = body.stock_code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
     if len(code) != 6 or not code.isdigit():
-        return fail_response("股票代码格式错误")
+        return fail_response("股票代码格式错误，请输入6位数字代码")
 
     existing = (
         db.query(Watchlist)
@@ -131,21 +131,39 @@ def add_stock(
     if existing:
         return fail_response("已在自选股中")
 
-    # 如果未传名称，尝试从stock_basic获取
+    # 获取股票名称：优先从stock_basic，其次从akshare全量列表
     name = body.stock_name
-    if not name:
-        stock = db.query(StockBasic).filter(StockBasic.stock_code == code).first()
-        name = stock.stock_name if stock else code
+    stock = db.query(StockBasic).filter(StockBasic.stock_code == code).first()
+    if stock and stock.stock_name and stock.stock_name != code:
+        name = stock.stock_name
+    else:
+        # 从akshare全量列表查找名称
+        from app.api.stock import _get_all_stocks, _detect_market
+        all_stocks = _get_all_stocks()
+        for s_code, s_name in all_stocks:
+            if s_code == code:
+                name = s_name
+                break
+        # 自动入库到stock_basic
+        if not stock:
+            market = _detect_market(code)
+            stock = StockBasic(
+                stock_code=code,
+                market=market,
+                secucode=f"{market}{code}",
+                stock_name=name or code,
+            )
+            db.add(stock)
 
     w = Watchlist(
         user_id=current_user.id,
         stock_code=code,
-        stock_name=name,
+        stock_name=name or code,
         remark=body.remark,
     )
     db.add(w)
     db.commit()
-    return success_response({"stock_code": code, "stock_name": name})
+    return success_response({"stock_code": code, "stock_name": name or code})
 
 
 @router.delete("/{code}")
