@@ -1,6 +1,8 @@
 <template>
-  <a-layout class="basic-layout">
+  <a-layout class="basic-layout" :class="{ 'mobile-layout': isMobile }">
+    <!-- 桌面端侧边栏 -->
     <a-layout-sider
+      v-if="!isMobile"
       v-model:collapsed="appStore.collapsed"
       :trigger="null"
       collapsible
@@ -8,14 +10,29 @@
     >
       <Sidebar />
     </a-layout-sider>
+
+    <!-- 移动端抽屉菜单 -->
+    <a-drawer
+      v-if="isMobile"
+      v-model:open="mobileMenuOpen"
+      placement="left"
+      :width="260"
+      :closable="false"
+      class="mobile-drawer"
+      @close="mobileMenuOpen = false"
+    >
+      <Sidebar @navigate="mobileMenuOpen = false" />
+    </a-drawer>
+
     <a-layout>
       <a-layout-header class="header">
         <div class="header-left">
-          <MenuFoldOutlined v-if="!appStore.collapsed" class="trigger" @click="appStore.toggleSidebar" />
-          <MenuUnfoldOutlined v-else class="trigger" @click="appStore.toggleSidebar" />
+          <MenuFoldOutlined v-if="!isMobile && !appStore.collapsed" class="trigger" @click="appStore.toggleSidebar" />
+          <MenuUnfoldOutlined v-else-if="!isMobile && appStore.collapsed" class="trigger" @click="appStore.toggleSidebar" />
+          <MenuOutlined v-if="isMobile" class="trigger mobile-menu-btn" @click="mobileMenuOpen = true" />
           <span class="logo">FinScan</span>
         </div>
-        <div class="header-center">
+        <div class="header-center" v-if="!isMobile">
           <GlobalSearch />
         </div>
         <div class="header-right">
@@ -37,7 +54,7 @@
           </a-dropdown>
         </div>
       </a-layout-header>
-      <a-layout-content class="content">
+      <a-layout-content class="content" :class="{ 'content-mobile': isMobile }">
         <router-view />
       </a-layout-content>
     </a-layout>
@@ -45,21 +62,37 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
-import { MenuFoldOutlined, MenuUnfoldOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons-vue'
+import { MenuFoldOutlined, MenuUnfoldOutlined, MenuOutlined, UserOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import Sidebar from './Sidebar.vue'
 import GlobalSearch from '@/components/GlobalSearch.vue'
 
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const router = useRouter()
+const mobileMenuOpen = ref(false)
+const windowWidth = ref(window.innerWidth)
+const isMobile = computed(() => windowWidth.value < 768)
+
+function handleResize() {
+  windowWidth.value = window.innerWidth
+}
 
 const handleLogout = () => {
   authStore.logout()
   router.push('/login')
 }
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
 </script>
 
 <style scoped>
@@ -78,6 +111,11 @@ const handleLogout = () => {
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 56px;
+  line-height: 56px;
 }
 
 .header-left {
@@ -90,6 +128,7 @@ const handleLogout = () => {
   font-size: 18px;
   cursor: pointer;
   color: #666;
+  padding: 8px;
 }
 
 .trigger:hover {
@@ -120,6 +159,37 @@ const handleLogout = () => {
 
 .content {
   margin: 16px;
-  min-height: calc(100vh - 64px - 32px);
+  min-height: calc(100vh - 56px - 32px);
+}
+
+.content-mobile {
+  margin: 0;
+  padding: 12px;
+  min-height: calc(100vh - 56px);
+  overflow-x: hidden;
+}
+
+/* 移动端适配 */
+.mobile-layout :deep(.ant-layout-sider) {
+  display: none;
+}
+
+.mobile-drawer :deep(.ant-drawer-body) {
+  padding: 0;
+  background: #001529;
+}
+
+.mobile-menu-btn {
+  font-size: 20px;
+}
+
+@media (max-width: 767px) {
+  .header {
+    padding: 0 12px;
+  }
+
+  .logo {
+    font-size: 16px;
+  }
 }
 </style>

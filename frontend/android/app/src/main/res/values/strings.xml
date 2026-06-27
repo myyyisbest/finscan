@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">财报排雷</string>
+    <string name="title_activity_main">财报排雷</string>
+    <string name="package_name">com.finscan.app</string>
+    <string name="custom_url_scheme">com.finscan.app</string>
+</resources>

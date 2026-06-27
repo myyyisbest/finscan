@@ -1,10 +1,36 @@
 import axios from 'axios'
 
+// 获取API基础地址：优先使用localStorage配置，移动端APP需要配置后端地址
+function getBaseURL(): string {
+  // Capacitor环境检测
+  const isCapacitor = (window as any).Capacitor !== undefined
+  if (isCapacitor) {
+    const saved = localStorage.getItem('api_base_url')
+    if (saved) return saved
+    // 默认提示用户配置
+    return ''
+  }
+  // Web环境使用相对路径（走vite代理或同源部署）
+  return ''
+}
+
 const api = axios.create({
-  baseURL: '',
+  baseURL: getBaseURL(),
   timeout: 60000,
   headers: { 'Content-Type': 'application/json' }
 })
+
+// 提供更新baseURL的方法
+export function updateBaseURL(url: string) {
+  localStorage.setItem('api_base_url', url)
+  api.defaults.baseURL = url
+}
+
+// 初始化：如果有保存的配置，使用它
+const savedURL = localStorage.getItem('api_base_url')
+if (savedURL) {
+  api.defaults.baseURL = savedURL
+}
 
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
@@ -34,7 +60,10 @@ api.interceptors.response.use(
   error => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      // Capacitor环境下不跳转，用路由
+      if (!(window as any).Capacitor) {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
