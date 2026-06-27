@@ -57,8 +57,21 @@ class Watchlist(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("user.id"), index=True)
     stock_code: Mapped[str] = mapped_column(String(10), index=True)
     stock_name: Mapped[str] = mapped_column(String(50))
+    group_id: Mapped[int] = mapped_column(Integer, ForeignKey("watchlist_group.id", ondelete="SET NULL"), nullable=True, default=0)
     remark: Mapped[str | None] = mapped_column(String(200), nullable=True)
     add_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    group: Mapped["WatchlistGroup | None"] = relationship("WatchlistGroup", foreign_keys=[group_id])
+
+
+class WatchlistGroup(Base):
+    """自选分组。"""
+    __tablename__ = "watchlist_group"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("user.id"), index=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 # ===================== 财务核心域 =====================

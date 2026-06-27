@@ -33,6 +33,8 @@ export interface WatchlistItem {
   market: string
   secucode: string
   industry?: string
+  group_id: number
+  group_name: string
   remark?: string
   add_time: string
   latest_report?: {
@@ -160,10 +162,19 @@ export interface DupontData {
 }
 
 export const watchlistApi = {
-  list: () => api.get<{ code: number; data: WatchlistItem[] }>('/api/v1/watchlist'),
-  add: (stock_code: string, stock_name?: string, remark?: string) =>
-    api.post<{ code: number; data: any }>('/api/v1/watchlist', { stock_code, stock_name, remark }),
+  list: (groupId?: number) => {
+    const params = groupId !== undefined ? { group_id: groupId } : {}
+    return api.get<{ code: number; data: WatchlistItem[] }>('/api/v1/watchlist', { params })
+  },
+  add: (stock_code: string, stock_name?: string, group_id?: number) =>
+    api.post<{ code: number; data: any }>('/api/v1/watchlist', { stock_code, stock_name, group_id }),
   remove: (code: string) => api.delete<{ code: number; data: any }>(`/api/v1/watchlist/${code}`),
+  listGroups: () => api.get<{ code: number; data: Array<{ id: number; name: string; stock_count: number }> }>('/api/v1/watchlist/groups'),
+  createGroup: (name: string) => api.post<{ code: number; data: any }>('/api/v1/watchlist/groups', { name }),
+  deleteGroup: (id: number) => api.delete<{ code: number; data: any }>(`/api/v1/watchlist/groups/${id}`),
+  renameGroup: (id: number, name: string) => api.patch<{ code: number; data: any }>(`/api/v1/watchlist/groups/${id}`, { name }),
+  moveStock: (stock_code: string, group_id: number) =>
+    api.post<{ code: number; data: any }>('/api/v1/watchlist/move', { stock_code, group_id }),
 }
 
 export const collectorApi = {

@@ -1,5 +1,5 @@
 """自选股API。"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -7,7 +7,7 @@ from typing import List, Optional
 from app.db import get_db
 from app.core.auth import get_current_user
 from app.core.response import success_response, fail_response
-from app.models import Watchlist, User, StockBasic, FinReport, FinMainIndicator
+from app.models import Watchlist, WatchlistGroup, User, StockBasic, FinReport, FinMainIndicator
 
 router = APIRouter(prefix="/api/v1/watchlist", tags=["watchlist"])
 
@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/v1/watchlist", tags=["watchlist"])
 class AddStockIn(BaseModel):
     stock_code: str
     stock_name: Optional[str] = None
+    group_id: Optional[int] = None
     remark: Optional[str] = None
 
 
@@ -22,18 +23,157 @@ class RemoveStockIn(BaseModel):
     stock_code: str
 
 
+class CreateGroupIn(BaseModel):
+    name: str
+
+
+class MoveStockIn(BaseModel):
+    stock_code: str
+    group_id: Optional[int] = None
+
+
+@router.get("/groups")
+def list_groups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取用户的自选分组列表。"""
+    groups = (
+        db.query(WatchlistGroup)
+        .filter(WatchlistGroup.user_id == current_user.id)
+        .order_by(WatchlistGroup.sort_order, WatchlistGroup.created_at)
+        .all()
+    )
+    result = []
+    for g in groups:
+        count = db.query(Watchlist).filter(Watchlist.user_id == current_user.id, Watchlist.group_id == g.id).count()
+        result.append({
+            "id": g.id,
+            "name": g.name,
+            "sort_order": g.sort_order,
+            "stock_count": count,
+            "created_at": str(g.created_at),
+        })
+    return success_response(result)
+
+
+@router.post("/groups")
+def create_group(
+    body: CreateGroupIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """创建新的自选分组。"""
+    name = body.name.strip()
+    if not name:
+        return fail_response("分组名称不能为空")
+    if len(name) > 50:
+        return fail_response("分组名称最多50个字符")
+
+    # 检查是否重名
+    existing = db.query(WatchlistGroup).filter(
+        WatchlistGroup.user_id == current_user.id,
+        WatchlistGroup.name == name
+    ).first()
+    if existing:
+        return fail_response("分组名称已存在")
+
+    max_order = db.query(WatchlistGroup.sort_order).filter(
+        WatchlistGroup.user_id == current_user.id
+    ).order_by(WatchlistGroup.sort_order.desc()).first()
+    next_order = (max_order[0] + 1) if max_order else 0
+
+    g = WatchlistGroup(user_id=current_user.id, name=name, sort_order=next_order)
+    db.add(g)
+    db.commit()
+    return success_response({"id": g.id, "name": g.name, "sort_order": g.sort_order})
+
+
+@router.delete("/groups/{group_id}")
+def delete_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """删除分组（组内股票移至默认分组）。"""
+    g = db.query(WatchlistGroup).filter(
+        WatchlistGroup.id == group_id,
+        WatchlistGroup.user_id == current_user.id
+    ).first()
+    if not g:
+        return fail_response("分组不存在")
+
+    # 将组内股票移至默认分组（group_id=0）
+    db.query(Watchlist).filter(
+        Watchlist.user_id == current_user.id,
+        Watchlist.group_id == group_id
+    ).update({"group_id": 0})
+    db.delete(g)
+    db.commit()
+    return success_response({"deleted": group_id})
+
+
+@router.patch("/groups/{group_id}")
+def rename_group(
+    group_id: int,
+    body: CreateGroupIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """重命名分组。"""
+    g = db.query(WatchlistGroup).filter(
+        WatchlistGroup.id == group_id,
+        WatchlistGroup.user_id == current_user.id
+    ).first()
+    if not g:
+        return fail_response("分组不存在")
+    g.name = body.name.strip()
+    db.commit()
+    return success_response({"id": g.id, "name": g.name})
+
+
+@router.post("/move")
+def move_stock(
+    body: MoveStockIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """将股票移动到指定分组。"""
+    code = body.stock_code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+    w = db.query(Watchlist).filter(
+        Watchlist.user_id == current_user.id,
+        Watchlist.stock_code == code
+    ).first()
+    if not w:
+        return fail_response("该股票不在自选股中")
+
+    if body.group_id is not None and body.group_id > 0:
+        # 验证分组存在
+        g = db.query(WatchlistGroup).filter(
+            WatchlistGroup.id == body.group_id,
+            WatchlistGroup.user_id == current_user.id
+        ).first()
+        if not g:
+            return fail_response("目标分组不存在")
+    else:
+        body.group_id = 0  # 默认分组
+
+    w.group_id = body.group_id
+    db.commit()
+    return success_response({"stock_code": code, "group_id": body.group_id})
+
+
 @router.get("")
 def list_watchlist(
+    group_id: int = Query(None, description="分组ID，不传则返回全部"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """获取当前用户的自选股列表，附带最新财务概览。金额单位：元。"""
-    items = (
-        db.query(Watchlist)
-        .filter(Watchlist.user_id == current_user.id)
-        .order_by(Watchlist.add_time.desc())
-        .all()
-    )
+    query = db.query(Watchlist).filter(Watchlist.user_id == current_user.id)
+    if group_id is not None:
+        query = query.filter(Watchlist.group_id == group_id)
+    items = query.order_by(Watchlist.add_time.desc()).all()
     result = []
     for w in items:
         code = w.stock_code
@@ -86,6 +226,8 @@ def list_watchlist(
             "market": stock.market if stock else "",
             "secucode": stock.secucode if stock else f"SZ{code}",
             "industry": stock.industry if stock else None,
+            "group_id": w.group_id or 0,
+            "group_name": w.group.name if w.group else "默认分组",
             "remark": w.remark,
             "add_time": str(w.add_time),
             "latest_report": {
@@ -177,6 +319,7 @@ def add_stock(
         user_id=current_user.id,
         stock_code=code,
         stock_name=name,
+        group_id=body.group_id or 0,
         remark=body.remark,
     )
     db.add(w)

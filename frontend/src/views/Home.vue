@@ -1,15 +1,54 @@
 <template>
   <div class="home-page">
+    <!-- 顶部：分组Tab + 操作按钮 -->
     <div class="page-header">
-      <h2 class="page-title">我的自选</h2>
+      <div class="group-tabs">
+        <a-tabs v-model:activeKey="activeGroupKey" @change="onGroupChange">
+          <a-tab-pane key="all">
+            <template #tab>全部</template>
+          </a-tab-pane>
+          <a-tab-pane v-for="g in groups" :key="g.id">
+            <template #tab>
+              <span class="group-tab">
+                {{ g.name }}
+                <span class="group-count">({{ g.stock_count }})</span>
+                <a-tag v-if="g.id !== 0" color="default" class="group-delete-btn" @click.stop="deleteGroup(g.id)">
+                  <CloseOutlined style="font-size: 10px" />
+                </a-tag>
+              </span>
+            </template>
+          </a-tab-pane>
+          <template #rightExtra>
+            <a-button type="text" size="small" @click="showAddGroupModal = true" class="add-group-btn">
+              <PlusOutlined /> 新建分组
+            </a-button>
+          </template>
+        </a-tabs>
+      </div>
       <div class="header-actions">
         <a-button type="primary" @click="refreshData" :loading="loading">
-          <ReloadOutlined /> 刷新数据
+          <ReloadOutlined /> 刷新
         </a-button>
         <a-button @click="collectAll" :loading="collecting">
-          <CloudDownloadOutlined /> 采集数据
+          <CloudDownloadOutlined /> 采集
         </a-button>
       </div>
+    </div>
+
+    <!-- 分组统计卡片 -->
+    <div v-if="activeGroupKey === 'all'" class="summary-cards">
+      <a-card size="small" class="summary-card">
+        <a-statistic title="股票数量" :value="watchlist.length" />
+      </a-card>
+      <a-card size="small" class="summary-card">
+        <a-statistic title="已采集" :value="watchlist.filter(w => w.latest_report).length" />
+      </a-card>
+      <a-card size="small" class="summary-card">
+        <a-statistic title="平均ROE" :value="avgRoe" :precision="2" suffix="%" />
+      </a-card>
+      <a-card size="small" class="summary-card">
+        <a-statistic title="平均资产负债率" :value="avgDebtRatio" :precision="2" suffix="%" />
+      </a-card>
     </div>
 
     <a-card class="watchlist-card">
@@ -17,9 +56,9 @@
         <a-table
           :columns="columns"
           :data-source="watchlist"
-          :pagination="false"
+          :pagination="{ pageSize: 20 }"
           row-key="stock_code"
-          :scroll="{ x: 1000 }"
+          :scroll="{ x: 1200 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'stock_name'">
@@ -27,6 +66,19 @@
                 <span class="stock-code">{{ record.stock_code }}</span>
                 <span class="stock-name-text">{{ record.stock_name }}</span>
               </a>
+            </template>
+            <template v-else-if="column.key === 'group_name'">
+              <a-dropdown>
+                <span class="group-badge">{{ record.group_name }}</span>
+                <template #overlay>
+                  <a-menu @click="({ key }) => moveToGroup(record.stock_code, key)">
+                    <a-menu-item key="0">默认分组</a-menu-item>
+                    <a-menu-item v-for="g in groups.filter(x => x.id !== 0)" :key="g.id">
+                      {{ g.name }}
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
             </template>
             <template v-else-if="column.key === 'action'">
               <div class="action-btns">
@@ -77,15 +129,15 @@
             </template>
           </template>
         </a-table>
-        <a-empty v-if="!loading && watchlist.length === 0" description="暂无自选股，请通过上方搜索添加">
+        <a-empty v-if="!loading && watchlist.length === 0" description="暂无自选股">
           <template #description>
-            <span>暂无自选股，请使用顶部搜索框搜索并添加股票</span>
+            <span>暂无自选股，点击右下角按钮添加股票</span>
           </template>
         </a-empty>
       </a-spin>
     </a-card>
 
-    <!-- 快速添加弹窗 -->
+    <!-- 添加股票弹窗 -->
     <a-modal
       v-model:open="addModalVisible"
       title="添加自选股"
@@ -94,38 +146,41 @@
       okText="添加"
       cancelText="取消"
     >
-      <a-input-search
-        v-model:value="addKeyword"
-        placeholder="输入股票代码（如002130）或名称搜索"
-        size="large"
-        @search="searchToAdd"
-        @change="onKeywordChange"
-        style="margin-bottom: 12px"
-      />
-      <div v-if="addSearchResults.length > 0" class="add-results">
-        <div
-          v-for="item in addSearchResults"
-          :key="item.stock_code"
-          class="add-result-item"
-          :class="{ selected: selectedToAdd?.stock_code === item.stock_code }"
-          @click="selectStock(item)"
-        >
-          <span class="code">{{ item.stock_code }}</span>
-          <span class="name">{{ item.stock_name }}</span>
-          <span v-if="item.industry" class="industry">{{ item.industry }}</span>
+      <div class="add-form">
+        <div class="form-row">
+          <div class="form-item">
+            <div class="form-label">股票代码 <span class="required">*</span></div>
+            <a-input v-model:value="addForm.code" placeholder="如 002130" :disabled="!!addForm.name" />
+          </div>
+          <div class="form-divider">或</div>
+          <div class="form-item">
+            <div class="form-label">股票名称 <span class="required">*</span></div>
+            <a-input v-model:value="addForm.name" placeholder="如 沃尔核材" :disabled="!!addForm.code" />
+          </div>
+        </div>
+        <div class="form-hint">代码/名称二选一填写即可</div>
+        <div class="form-item">
+          <div class="form-label">加入分组</div>
+          <a-select v-model:value="addForm.groupId" placeholder="默认分组" style="width: 100%">
+            <a-select-option :value="0">默认分组</a-select-option>
+            <a-select-option v-for="g in groups.filter(x => x.id !== 0)" :key="g.id" :value="g.id">
+              {{ g.name }}
+            </a-select-option>
+          </a-select>
         </div>
       </div>
-      <div v-else-if="isCodeInput" class="code-direct-add">
-        <div class="direct-add-tip">
-          <span class="code-badge">{{ addKeyword }}</span>
-          <span class="tip-text">未搜索到该股票，可直接通过代码添加</span>
-        </div>
-      </div>
-      <a-empty v-else-if="addKeyword && !addSearching" description="未找到股票，可输入6位股票代码直接添加" />
-      <div class="add-tip">
-        <a-tag color="blue">提示</a-tag>
-        支持直接输入6位股票代码添加，添加后点击"采集"按钮获取财务数据
-      </div>
+    </a-modal>
+
+    <!-- 新建分组弹窗 -->
+    <a-modal
+      v-model:open="showAddGroupModal"
+      title="新建分组"
+      @ok="confirmAddGroup"
+      :confirm-loading="addGroupLoading"
+      okText="创建"
+      cancelText="取消"
+    >
+      <a-input v-model:value="newGroupName" placeholder="请输入分组名称" />
     </a-modal>
 
     <div class="fab-btn" @click="addModalVisible = true" title="添加自选股">
@@ -138,7 +193,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, ReloadOutlined, CloudDownloadOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ReloadOutlined, CloudDownloadOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { watchlistApi, stockApi, collectorApi, type WatchlistItem, type SearchResult } from '@/api/finance'
 
 const router = useRouter()
@@ -147,19 +202,39 @@ const collecting = ref(false)
 const watchlist = ref<WatchlistItem[]>([])
 const collectingMap = ref<Record<string, boolean>>({})
 
+// 分组相关
+interface Group { id: number; name: string; stock_count: number }
+const groups = ref<Group[]>([])
+const activeGroupKey = ref('all')
+const showAddGroupModal = ref(false)
+const newGroupName = ref('')
+const addGroupLoading = ref(false)
+
+// 添加股票表单
 const addModalVisible = ref(false)
-const addKeyword = ref('')
-const addSearching = ref(false)
-const addSearchResults = ref<SearchResult[]>([])
-const selectedToAdd = ref<SearchResult | null>(null)
+const addForm = ref({ code: '', name: '', groupId: 0 })
 const addLoading = ref(false)
 
-const isCodeInput = computed(() => {
-  return /^\d{6}$/.test(addKeyword.value) && addSearchResults.value.length === 0 && !addSearching.value
+// 计算属性
+const avgRoe = computed(() => {
+  const roes = watchlist.value
+    .filter(w => w.latest_report?.roe != null)
+    .map(w => w.latest_report!.roe!)
+  if (roes.length === 0) return 0
+  return roes.reduce((a, b) => a + b, 0) / roes.length
+})
+
+const avgDebtRatio = computed(() => {
+  const ratios = watchlist.value
+    .filter(w => w.latest_report?.debt_ratio != null)
+    .map(w => w.latest_report!.debt_ratio!)
+  if (ratios.length === 0) return 0
+  return ratios.reduce((a, b) => a + b, 0) / ratios.length
 })
 
 const columns = [
-  { title: '股票', key: 'stock_name', width: 180, fixed: 'left' as const },
+  { title: '股票', key: 'stock_name', width: 160, fixed: 'left' as const },
+  { title: '分组', key: 'group_name', width: 100 },
   { title: '最新报告期', key: 'latest_report', width: 120 },
   { title: '营业总收入(万)', key: 'total_revenue', width: 150, align: 'right' as const },
   { title: '归母净利润(万)', key: 'net_profit_parent', width: 150, align: 'right' as const },
@@ -169,10 +244,22 @@ const columns = [
   { title: '操作', key: 'action', width: 80, align: 'center' as const, fixed: 'right' as const },
 ]
 
+async function loadGroups() {
+  try {
+    const res = await watchlistApi.listGroups()
+    if (res.code === 0) {
+      groups.value = res.data || []
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 async function loadWatchlist() {
   loading.value = true
   try {
-    const res = await watchlistApi.list()
+    const groupId = activeGroupKey.value === 'all' ? null : parseInt(activeGroupKey.value)
+    const res = await watchlistApi.list(groupId ?? undefined)
     if (res.code === 0) {
       watchlist.value = res.data || []
     }
@@ -184,14 +271,62 @@ async function loadWatchlist() {
   }
 }
 
+function onGroupChange() {
+  loadWatchlist()
+}
+
+async function confirmAddGroup() {
+  if (!newGroupName.value.trim()) {
+    message.warning('请输入分组名称')
+    return
+  }
+  addGroupLoading.value = true
+  try {
+    await watchlistApi.createGroup(newGroupName.value.trim())
+    message.success('分组创建成功')
+    showAddGroupModal.value = false
+    newGroupName.value = ''
+    await loadGroups()
+    // 切换到新建的分组
+    const g = groups.value.find(x => x.name === newGroupName.value.trim())
+    if (g) activeGroupKey.value = String(g.id)
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '创建失败')
+  } finally {
+    addGroupLoading.value = false
+  }
+}
+
+async function deleteGroup(groupId: number) {
+  try {
+    await watchlistApi.deleteGroup(groupId)
+    message.success('分组已删除')
+    await loadGroups()
+    if (activeGroupKey.value === String(groupId)) {
+      activeGroupKey.value = 'all'
+    }
+    loadWatchlist()
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '删除失败')
+  }
+}
+
+async function moveToGroup(stockCode: string, groupId: string | number) {
+  try {
+    await watchlistApi.moveStock(stockCode, Number(groupId))
+    message.success('已移动到分组')
+    loadWatchlist()
+    loadGroups()
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '移动失败')
+  }
+}
+
 function formatWan(val: number) {
   if (val == null) return '-'
   const absVal = Math.abs(val)
-  if (absVal >= 1e8) {
-    return (val / 1e8).toFixed(2) + '亿'
-  } else if (absVal >= 1e4) {
-    return (val / 1e4).toFixed(2) + '万'
-  }
+  if (absVal >= 1e8) return (val / 1e8).toFixed(2) + '亿'
+  if (absVal >= 1e4) return (val / 1e4).toFixed(2) + '万'
   return val.toFixed(2)
 }
 
@@ -218,6 +353,7 @@ async function removeStock(record: WatchlistItem) {
     await watchlistApi.remove(record.stock_code)
     message.success('已移除')
     loadWatchlist()
+    loadGroups()
   } catch (e) {
     message.error('移除失败')
   }
@@ -232,11 +368,8 @@ async function collectAll() {
   collecting.value = true
   try {
     await collectorApi.triggerCollect('watchlist')
-    message.success('采集任务已启动，数据正在后台采集，请稍候刷新查看')
-    // 5秒后自动刷新
-    setTimeout(() => {
-      loadWatchlist()
-    }, 5000)
+    message.success('采集任务已启动，请稍候刷新查看')
+    setTimeout(() => { loadWatchlist() }, 5000)
   } catch (e) {
     message.error('启动采集失败')
   } finally {
@@ -250,7 +383,6 @@ async function collectStock(record: WatchlistItem) {
   try {
     await collectorApi.triggerCollect('single', record.stock_code)
     message.success(`已开始采集 ${record.stock_name}，请稍候刷新查看`)
-    // 8秒后自动刷新
     setTimeout(() => {
       loadWatchlist()
       collectingMap.value[record.stock_code] = false
@@ -261,76 +393,25 @@ async function collectStock(record: WatchlistItem) {
   }
 }
 
-let addSearchTimer: number | null = null
-
-function onKeywordChange() {
-  selectedToAdd.value = null
-  if (addSearchTimer) clearTimeout(addSearchTimer)
-  addSearchTimer = window.setTimeout(() => {
-    searchToAdd()
-  }, 300)
-}
-
-async function searchToAdd() {
-  if (!addKeyword.value) {
-    addSearchResults.value = []
-    return
-  }
-  addSearching.value = true
-  try {
-    const res = await stockApi.search(addKeyword.value)
-    if (res.code === 0) {
-      addSearchResults.value = res.data || []
-    }
-  } finally {
-    addSearching.value = false
-  }
-}
-
-function selectStock(item: SearchResult) {
-  selectedToAdd.value = item
-}
-
 async function confirmAdd() {
-  let input = addKeyword.value.trim()
-  if (!input) {
-    message.warning('请输入股票代码或名称')
+  const { code, name, groupId } = addForm.value
+  if (!code && !name) {
+    message.warning('请填写股票代码或名称')
     return
-  }
-
-  let code = ''
-  let name = ''
-
-  if (selectedToAdd.value) {
-    code = selectedToAdd.value.stock_code
-    name = selectedToAdd.value.stock_name
-  } else if (/^\d{6}$/.test(input)) {
-    code = input
-    name = input
-  } else {
-    // 输入的是名称，从搜索结果里找第一个匹配的
-    const matched = addSearchResults.value.find(s => 
-      s.stock_name === input || s.stock_name.includes(input)
-    )
-    if (matched) {
-      code = matched.stock_code
-      name = matched.stock_name
-    } else {
-      // 搜索结果为空但用户点了添加，直接把输入当关键词发后端验证
-      code = input
-      name = input
-    }
   }
 
   addLoading.value = true
   try {
-    await watchlistApi.add(code, name)
-    message.success('添加成功，可点击"采集"按钮获取财务数据')
-    addModalVisible.value = false
-    addKeyword.value = ''
-    selectedToAdd.value = null
-    addSearchResults.value = []
-    loadWatchlist()
+    const res = await watchlistApi.add(code || name, undefined, groupId || 0)
+    if (res.code === 0) {
+      message.success('添加成功，可点击"采集"按钮获取财务数据')
+      addModalVisible.value = false
+      addForm.value = { code: '', name: '', groupId: 0 }
+      loadWatchlist()
+      loadGroups()
+    } else {
+      message.error(res.message || '添加失败')
+    }
   } catch (e: any) {
     message.error(e?.response?.data?.message || '添加失败')
   } finally {
@@ -339,184 +420,78 @@ async function confirmAdd() {
 }
 
 onMounted(() => {
+  loadGroups()
   loadWatchlist()
 })
 </script>
 
 <style scoped>
-.home-page {
-  min-height: calc(100vh - 96px);
-}
+.home-page { min-height: calc(100vh - 96px); }
 
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.group-tabs { flex: 1; }
+.group-tab { display: inline-flex; align-items: center; gap: 4px; }
+.group-count { color: #999; font-size: 12px; }
+.group-delete-btn { margin-left: 4px; padding: 0 4px; height: 18px; line-height: 18px; }
+.add-group-btn { color: #1d4ed8; }
+
+.header-actions { display: flex; gap: 12px; flex-shrink: 0; }
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   margin-bottom: 16px;
 }
+.summary-card { background: #fafafa; }
 
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0;
-}
+.watchlist-card { background: #fff; border-radius: 8px; }
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
+.stock-link { display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.stock-link:hover .stock-name-text { color: #1d4ed8; }
+.stock-code { font-size: 12px; color: #999; }
+.stock-name-text { font-size: 14px; font-weight: 500; color: #1a1a1a; }
+.group-badge { font-size: 12px; color: #666; cursor: pointer; }
+.no-data { color: #ccc; }
 
-.watchlist-card {
-  background: #fff;
-  border-radius: 8px;
-}
+.profit-pos { color: #cf1322; }
+.profit-neg { color: #389e0d; }
+.roe-good { color: #cf1322; font-weight: 600; }
+.roe-ok { color: #d48806; }
+.roe-bad { color: #389e0d; }
 
-.stock-link {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  cursor: pointer;
-}
+.action-btns { display: flex; gap: 4px; align-items: center; justify-content: center; }
 
-.stock-link:hover .stock-name-text {
-  color: #1d4ed8;
-}
-
-.stock-code {
-  font-size: 12px;
-  color: #999;
-}
-
-.stock-name-text {
-  font-size: 14px;
-  font-weight: 500;
-  color: #1a1a1a;
-}
-
-.no-data {
-  color: #ccc;
-}
-
-.profit-pos {
-  color: #cf1322;
-}
-
-.profit-neg {
-  color: #389e0d;
-}
-
-.roe-good {
-  color: #cf1322;
-  font-weight: 600;
-}
-
-.roe-ok {
-  color: #d48806;
-}
-
-.roe-bad {
-  color: #389e0d;
-}
+.add-form { display: flex; flex-direction: column; gap: 16px; }
+.form-row { display: flex; align-items: flex-end; gap: 8px; }
+.form-item { flex: 1; }
+.form-divider { color: #999; padding-bottom: 6px; }
+.form-label { font-size: 13px; color: #333; margin-bottom: 6px; }
+.required { color: #cf1322; }
+.form-hint { font-size: 12px; color: #999; margin-top: -10px; }
 
 .fab-btn {
   position: fixed;
-  bottom: 40px;
-  right: 40px;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  right: 32px;
+  bottom: 32px;
+  width: 52px;
+  height: 52px;
   background: #1d4ed8;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(29, 78, 216, 0.4);
   transition: transform 0.2s;
-  z-index: 50;
+  z-index: 100;
 }
-
-.fab-btn:hover {
-  transform: scale(1.1);
-  background: #1e40af;
-}
-
-.add-results {
-  max-height: 240px;
-  overflow-y: auto;
-  border: 1px solid #f0f0f0;
-  border-radius: 4px;
-}
-
-.add-result-item {
-  padding: 10px 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.add-result-item:hover,
-.add-result-item.selected {
-  background: #e6f4ff;
-}
-
-.add-result-item .code {
-  color: #1d4ed8;
-  font-weight: 600;
-  min-width: 70px;
-}
-
-.add-result-item .industry {
-  font-size: 12px;
-  color: #999;
-  margin-left: auto;
-}
-
-.action-btns {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  justify-content: center;
-}
-
-.code-direct-add {
-  padding: 20px;
-  text-align: center;
-  border: 1px dashed #d9d9d9;
-  border-radius: 6px;
-  background: #fafafa;
-}
-
-.direct-add-tip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.code-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  background: #1d4ed8;
-  color: #fff;
-  border-radius: 4px;
-  font-weight: 600;
-  font-family: monospace;
-}
-
-.tip-text {
-  color: #666;
-  font-size: 14px;
-}
-
-.add-tip {
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: #f0f7ff;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #666;
-}
+.fab-btn:hover { transform: scale(1.08); }
 </style>

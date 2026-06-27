@@ -69,6 +69,20 @@ def _report_type_from_date(d: date) -> str:
     return "Annual"
 
 
+# 东财主要财务指标的 ROE 为年化值，需按报告期还原为实际单期值
+_ROE_ANNUALIZE_FACTOR = {"Q1": 4, "H1": 2, "Q3": Decimal(4) / Decimal(3), "Annual": 1}
+
+
+def _deannualize_roe(roe: Decimal | None, report_type: str) -> Decimal | None:
+    """将年化ROE还原为实际报告期的单期ROE。"""
+    if roe is None:
+        return None
+    factor = _ROE_ANNUALIZE_FACTOR.get(report_type, 1)
+    if factor == 1:
+        return roe
+    return roe / factor
+
+
 def _detect_market(code: str) -> str:
     """根据股票代码推断市场 SH/SZ/BJ。"""
     if code.startswith(("60", "68", "90")):
@@ -250,9 +264,11 @@ def collect_stock_data(code: str, stock_name: str = None) -> int:
                 _extract_cashflow_fields(obj, data["cashflow"])
 
             # 应用主要指标（ROE等优先用东财直接数据）
+            # 注意：东财主要指标的 ROE 为年化值，需还原为实际单期值
             if key in indicator_map:
                 ind = indicator_map[key]
-                obj.roe = _to_decimal(ind.get("净资产收益率(%)")) or obj.roe
+                raw_roe = _to_decimal(ind.get("净资产收益率(%)"))
+                obj.roe = _deannualize_roe(raw_roe, report_type) if raw_roe is not None else obj.roe
                 obj.roa = _to_decimal(ind.get("总资产利润率(%)")) or obj.roa
                 obj.gross_margin = _to_decimal(ind.get("销售毛利率(%)")) or obj.gross_margin
                 obj.net_margin = _to_decimal(ind.get("销售净利率(%)")) or obj.net_margin
