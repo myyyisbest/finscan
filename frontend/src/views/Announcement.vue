@@ -10,13 +10,6 @@
             @search="handleSearch"
             @pressEnter="handleSearch"
           />
-          <a-input-search
-            v-model:value="stockKeyword"
-            placeholder="股票代码或名称"
-            style="width: 150px"
-            @search="handleSearch"
-            @pressEnter="handleSearch"
-          />
           <a-select
             v-model:value="filterType"
             placeholder="公告类型"
@@ -107,7 +100,6 @@ const router = useRouter()
 
 const loading = ref(false)
 const searchKeyword = ref('')
-const stockKeyword = ref('')
 const filterType = ref('')
 const days = ref(7)
 const announcements = ref<Announcement[]>([])
@@ -179,9 +171,6 @@ async function loadAnnouncements() {
 
     if (searchKeyword.value) {
       params.keyword = searchKeyword.value
-    }
-    if (stockKeyword.value) {
-      params.stock = stockKeyword.value
     }
     if (filterType.value) {
       params.ann_type = filterType.value

@@ -159,13 +159,24 @@ def get_main_indicators(
                 ]
             },
             {
-                "name": "运营能力",
+                "name": "营运能力",
                 "items": [
                     {"name": "总资产周转天数", "key": "ZZCZZTS", "values": col("ZZCZZTS")},
                     {"name": "存货周转天数", "key": "CHZZTS", "values": col("CHZZTS")},
                     {"name": "应收账款周转天数", "key": "YSZKZZTS", "values": col("YSZKZZTS")},
                     {"name": "总资产周转率", "key": "TOAZZL", "values": col("TOAZZL")},
                     {"name": "存货周转率", "key": "CHZZL", "values": col("CHZZL")},
+                    {"name": "应收账款周转率", "key": "YSZKZZL", "values": col("YSZKZZL")},
+                ]
+            },
+            {
+                "name": "收益质量",
+                "items": [
+                    {"name": "预收账款/营业收入", "key": "YSZKYYSR", "values": col("YSZKYYSR")},
+                    {"name": "销售净现金流/营业收入", "key": "XSJXLYYSR", "values": col("XSJXLYYSR")},
+                    {"name": "经营净现金流/营业收入", "key": "JYXJLYYSR", "values": col("JYXJLYYSR")},
+                    {"name": "经营现金流/净利润", "key": "JYXJLJLR", "values": col("JYXJLJLR")},
+                    {"name": "资本支出/折旧摊销", "key": "ZBZCZJTX", "values": col("ZBZCZJTX")},
                 ]
             },
             {

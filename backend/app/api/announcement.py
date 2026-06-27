@@ -9,6 +9,8 @@ import pandas as pd
 
 from app.db import get_db
 from app.core.response import success_response
+from app.core.auth import get_current_user
+from app.models import Watchlist
 
 router = APIRouter(prefix="/api/v1/announcements", tags=["announcements"])
 
@@ -19,12 +21,26 @@ def list_announcements(
     page_size: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = None,
     ann_type: Optional[str] = None,
-    stock: Optional[str] = None,
     days: int = Query(7, ge=1, le=30),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
-    """获取公告列表，从东方财富实时获取数据，支持按股票代码/名称和公告类型筛选"""
+    """获取公告列表，只显示当前用户自选股票相关的公告"""
     try:
+        # 获取用户自选股票代码列表
+        watchlist_items = db.query(Watchlist).filter(
+            Watchlist.user_id == current_user.id
+        ).all()
+        watchlist_codes = [item.stock_code for item in watchlist_items]
+
+        if not watchlist_codes:
+            return success_response({
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+            })
+
         today = datetime.now().strftime("%Y%m%d")
 
         # 循环获取多天数据
@@ -60,15 +76,9 @@ def list_announcements(
                 "page_size": page_size,
             })
 
-        # 过滤
-        if stock:
-            stock_clean = stock.strip().upper()
-            if stock_clean.isdigit():
-                # 按代码过滤
-                df = df[df['代码'].astype(str).str.contains(stock_clean, na=False)]
-            else:
-                # 按名称过滤
-                df = df[df['名称'].astype(str).str.contains(stock_clean, na=False)]
+        # 只保留自选股票的公告
+        df['代码'] = df['代码'].astype(str).str.strip()
+        df = df[df['代码'].isin(watchlist_codes)]
 
         if ann_type:
             df = df[df['公告类型'].astype(str) == ann_type]
