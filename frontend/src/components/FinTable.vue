@@ -197,6 +197,9 @@ function formatValue(key: string, val: number | null): string {
     ['roe', 'roa', 'debt_ratio', 'current_ratio', 'quick_ratio', 'gross_margin',
      'net_margin', 'asset_turnover', 'inventory_turnover', 'receivable_turnover',
      'revenue_yoy', 'net_profit_yoy', 'gross_profit_yoy',
+     // 收益质量指标
+     'yszkzzl', 'yszkzzyl', 'xsjxl', 'jyxjl', 'jyxjljlr', 'zbzczjtx',
+     'yszkzzts', 'toazzl', 'chzzl',
     ].includes(lowerKey)
   if (isRatio) {
     return val.toFixed(2) + '%'

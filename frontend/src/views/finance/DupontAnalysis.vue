@@ -476,16 +476,26 @@ watch(() => props.stockCode, (val) => {
 }
 
 .node-card-root {
-  background: linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%);
   color: #fff;
-  border-color: #1e40af;
+  border-color: #1e3a8a;
   min-width: 180px;
   box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
 }
-.node-card-root .node-label,
-.node-card-root .node-value,
-.node-card-root .node-yoy,
-.node-card-root .expand-hint { color: #fff; }
+.node-card-root .node-label {
+  color: #fff;
+  font-weight: 600;
+}
+.node-card-root .node-value {
+  color: #fef08a;
+  font-weight: 700;
+}
+.node-card-root .node-yoy {
+  color: #fca5a5;
+}
+.node-card-root .expand-hint {
+  color: #93c5fd;
+}
 
 .node-card-l1 {
   background: #fff;
