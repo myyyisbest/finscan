@@ -100,7 +100,7 @@ import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
-  RiseOutlined, SwapOutlined, AppstoreOutlined
+  RiseOutlined, LineChartOutlined, SafetyOutlined, SwapOutlined, FileTextOutlined
 } from '@ant-design/icons-vue'
 import { watchlistApi, compareApi } from '@/api/finance'
 import type { WatchlistItem } from '@/api/finance'
@@ -121,8 +121,10 @@ const chartInstances = ref<Record<string, echarts.ECharts>>({})
 
 const compareTabs = [
   { key: 'profitability', label: '盈利能力', icon: RiseOutlined },
-  { key: 'efficiency', label: '运营效率', icon: SwapOutlined },
-  { key: 'structure', label: '资本结构', icon: AppstoreOutlined },
+  { key: 'growth', label: '成长能力', icon: LineChartOutlined },
+  { key: 'solvency', label: '偿债能力', icon: SafetyOutlined },
+  { key: 'operation', label: '营运能力', icon: SwapOutlined },
+  { key: 'financials', label: '关键财务报表项目', icon: FileTextOutlined },
 ]
 
 const metricConfig: Record<string, { key: string; label: string; unit?: string }[]> = {
@@ -132,13 +134,27 @@ const metricConfig: Record<string, { key: string; label: string; unit?: string }
     { key: 'gross_margin', label: '毛利率 (%)', unit: '%' },
     { key: 'net_margin', label: '净利率 (%)', unit: '%' },
   ],
-  efficiency: [
-    { key: 'total_asset_turnover', label: '总资产周转率', unit: '次' },
+  growth: [
+    { key: 'revenue_yoy', label: '营收同比 (%)', unit: '%' },
+    { key: 'net_profit_yoy', label: '净利润同比 (%)', unit: '%' },
   ],
-  structure: [
-    { key: 'debt_to_assets', label: '资产负债率 (%)', unit: '%' },
+  solvency: [
+    { key: 'debt_ratio', label: '资产负债率 (%)', unit: '%' },
     { key: 'current_ratio', label: '流动比率' },
     { key: 'quick_ratio', label: '速动比率' },
+  ],
+  operation: [
+    { key: 'total_asset_turnover', label: '总资产周转率', unit: '次' },
+    { key: 'inventory_turnover', label: '存货周转率', unit: '次' },
+    { key: 'receivable_turnover', label: '应收账款周转率', unit: '次' },
+  ],
+  financials: [
+    { key: 'total_revenue', label: '营业总收入', unit: '亿' },
+    { key: 'net_profit_parent', label: '归母净利润', unit: '亿' },
+    { key: 'total_assets', label: '总资产', unit: '亿' },
+    { key: 'total_liabilities', label: '总负债', unit: '亿' },
+    { key: 'total_equity', label: '股东权益', unit: '亿' },
+    { key: 'operate_cash_net', label: '经营现金流净额', unit: '亿' },
   ],
 }
 

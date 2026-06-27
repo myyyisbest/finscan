@@ -39,6 +39,13 @@ def compare_report(
 
     data = []
     for r in rows:
+        bs = r.balance_json or {}
+        inc = r.income_json or {}
+        
+        inventory = _f(bs.get("INVENTORY"))
+        receivable = _f(bs.get("ACCOUNTS_RECE"))
+        operate_cost = _f(inc.get("OPERATE_COST"))
+        
         data.append({
             "stock_code": r.stock_code,
             "stock_name": name_map.get(r.stock_code, r.stock_code),
@@ -50,6 +57,7 @@ def compare_report(
             "net_profit_parent": _f(r.net_profit_parent),
             "total_assets": _f(r.total_assets),
             "total_equity": _f(r.total_equity),
+            "total_liabilities": _f(r.total_liabilities),
             # 盈利能力
             "roe": _f(r.roe),
             "roa": _f(r.roa),
@@ -65,6 +73,12 @@ def compare_report(
             # 运营效率
             "total_asset_turnover": _f(r.total_revenue) / _f(r.total_assets)
                 if r.total_revenue and r.total_assets and float(r.total_assets) != 0 else None,
+            "inventory_turnover": operate_cost / inventory
+                if operate_cost and inventory and inventory != 0 else None,
+            "receivable_turnover": _f(r.total_revenue) / receivable
+                if r.total_revenue and receivable and receivable != 0 else None,
+            # 现金流
+            "operate_cash_net": _f(r.operate_cash_net),
         })
 
     return ok({
