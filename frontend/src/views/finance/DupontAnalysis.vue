@@ -15,7 +15,7 @@
 
     <a-spin :spinning="loading">
       <div v-if="!loading && roeNode" class="dupont-container">
-        <!-- 左侧：树形结构 -->
+        <!-- 上方：树形结构 -->
         <div class="dupont-tree">
           <div class="tree-canvas">
             <!-- 顶层 ROE -->
@@ -127,32 +127,31 @@
           </div>
         </div>
 
-        <!-- 右侧：选中节点详情 + 6期柱状图 -->
+        <!-- 下方：选中节点详情 + 6期柱状图 -->
         <div v-if="selectedNode" class="detail-panel">
           <a-card size="small" :bordered="false">
-            <template #title>
-              <span class="detail-title">{{ selectedNode.name }}</span>
-            </template>
-            <template #extra>
-              <a-tag color="blue">{{ selectedNode.formula }}</a-tag>
-            </template>
-
-            <div class="detail-stats">
-              <div class="stat-item">
-                <div class="stat-label">当前值</div>
-                <div class="stat-value">
-                  {{ formatVal(selectedNode.value) }} <span class="stat-unit">{{ selectedNode.unit }}</span>
-                </div>
+            <div class="detail-header">
+              <div class="detail-title-wrap">
+                <span class="detail-title">{{ selectedNode.name }}</span>
+                <a-tag color="blue">{{ selectedNode.formula }}</a-tag>
               </div>
-              <div class="stat-item" v-if="selectedNode.yoy != null">
-                <div class="stat-label">同比变化</div>
-                <div class="stat-value" :class="selectedNode.yoy >= 0 ? 'yoy-up' : 'yoy-down'">
-                  {{ selectedNode.yoy >= 0 ? '+' : '' }}{{ selectedNode.yoy }}%
+              <div class="detail-stats">
+                <div class="stat-item">
+                  <div class="stat-label">当前值</div>
+                  <div class="stat-value">
+                    {{ formatVal(selectedNode.value) }} <span class="stat-unit">{{ selectedNode.unit }}</span>
+                  </div>
                 </div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-label">报告期</div>
-                <div class="stat-value-small">{{ currentReportName }}</div>
+                <div class="stat-item" v-if="selectedNode.yoy != null">
+                  <div class="stat-label">同比变化</div>
+                  <div class="stat-value" :class="selectedNode.yoy >= 0 ? 'yoy-up' : 'yoy-down'">
+                    {{ selectedNode.yoy >= 0 ? '+' : '' }}{{ selectedNode.yoy }}%
+                  </div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-label">报告期</div>
+                  <div class="stat-value-small">{{ currentReportName }}</div>
+                </div>
               </div>
             </div>
 
@@ -415,16 +414,13 @@ watch(() => props.stockCode, (val) => {
 }
 
 .dupont-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-@media (max-width: 1100px) {
-  .dupont-container {
-    grid-template-columns: 1fr;
-  }
+.dupont-tree {
+  min-height: 300px;
 }
 
 .dupont-tree {
@@ -621,10 +617,24 @@ watch(() => props.stockCode, (val) => {
   width: 100%;
 }
 
-/* 右侧详情 */
+/* 下方详情 */
 .detail-panel {
-  position: sticky;
-  top: 16px;
+  width: 100%;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.detail-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .detail-title {
@@ -634,10 +644,14 @@ watch(() => props.stockCode, (val) => {
 }
 
 .detail-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.detail-stats .stat-item {
+  flex: 1;
+  min-width: 100px;
 }
 
 .stat-item {

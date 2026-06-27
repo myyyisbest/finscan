@@ -199,16 +199,15 @@ def get_report_dates(
 
 @router.get("/{code}/profile")
 def get_stock_profile(code: str, db: Session = Depends(get_db)):
-    """获取公司简介 + 最新公告：调用akshare的雪球简介接口和巨潮公告接口。
+    """获取公司简介 + 最新公告：优先从数据库读取，没有则实时获取入库。
 
     返回字段：
     - basic: 数据库中的基础信息
-    - profile: 雪球公司简介（如可用）
-    - announcements: 最新公告列表（来自巨潮 cninfo）
+    - profile: 公司概况（巨潮 cninfo）
+    - announcements: 最新公告列表
     - error: 错误信息
     """
     code_clean = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
-    xq_symbol = _get_xq_symbol(code_clean)
 
     # 数据库基础信息
     stock = db.query(StockBasic).filter(StockBasic.stock_code == code_clean).first()
@@ -221,61 +220,139 @@ def get_stock_profile(code: str, db: Session = Depends(get_db)):
         "list_date": str(stock.list_date) if stock and stock.list_date else None,
     }
 
-    # 1) 巨潮公司概况（真实可用）
+    # 1) 公司简介：优先用数据库已有字段，没有则实时获取并更新
     profile_data = None
     profile_error = None
-    try:
-        import akshare as ak
-        df = ak.stock_profile_cninfo(symbol=code_clean)
-        if df is not None and len(df) > 0:
-            # 转为字典，键名为中文
-            row = df.iloc[0]
-            profile_data = {col: str(row[col]) if row[col] is not None else '' for col in df.columns}
-    except Exception as e:
-        profile_error = str(e)
-        log.warning("akshare stock_profile_cninfo 失败: %s", e)
 
-    # 2) 东方财富公告（最近90天）
+    # 如果数据库已经有 full_name 和 industry，直接构造基础profile
+    if stock and stock.full_name:
+        profile_data = {
+            "公司名称": stock.full_name or "",
+            "A股代码": stock.stock_code or "",
+            "A股简称": stock.stock_name or "",
+            "所属行业": stock.industry or "",
+            "上市日期": str(stock.list_date) if stock.list_date else "",
+        }
+
+    # 如果数据库信息不全，尝试实时获取
+    if not profile_data or not profile_data.get("公司名称"):
+        try:
+            import akshare as ak
+            df = ak.stock_profile_cninfo(symbol=code_clean)
+            if df is not None and len(df) > 0:
+                row = df.iloc[0]
+                profile_data = {col: str(row[col]) if row[col] is not None else '' for col in df.columns}
+                # 更新数据库
+                if stock:
+                    full_name = str(row.get("公司名称", "")).strip()
+                    industry = str(row.get("所属行业", "")).strip()
+                    from datetime import datetime
+                    list_date_str = str(row.get("上市日期", "")).strip()
+                    if full_name and full_name != "nan":
+                        stock.full_name = full_name
+                    if industry and industry != "nan":
+                        stock.industry = industry
+                    if list_date_str and list_date_str != "nan":
+                        try:
+                            from app.collector.em_collector import _to_date
+                            stock.list_date = _to_date(list_date_str)
+                        except Exception:
+                            pass
+                    db.commit()
+        except Exception as e:
+            profile_error = str(e)
+            log.warning("akshare stock_profile_cninfo 失败: %s", e)
+
+    # 2) 公告：优先从数据库读取，没有则实时获取并入库
+    from app.models import Announcement
+    from datetime import datetime, timedelta
     announcements = []
     announce_error = None
-    try:
-        import akshare as ak
-        from datetime import datetime, timedelta
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
-        df_ann = ak.stock_individual_notice_report(
-            security=code_clean,
-            symbol="全部",
-            begin_date=start_date,
-            end_date=end_date,
-        )
-        if df_ann is not None and len(df_ann) > 0:
-            # 按公告日期倒序
-            df_ann = df_ann.sort_values("公告日期", ascending=False)
-            for _, row in df_ann.head(20).iterrows():
-                ann_date = row.get("公告日期", "")
-                ann_date_str = ""
-                if ann_date is not None and str(ann_date) != "nan":
+
+    # 先查数据库
+    cutoff_date = (datetime.now() - timedelta(days=180)).date()
+    db_anns = (
+        db.query(Announcement)
+        .filter(Announcement.stock_code == code_clean, Announcement.publish_date >= cutoff_date)
+        .order_by(Announcement.publish_date.desc())
+        .limit(20)
+        .all()
+    )
+
+    if db_anns:
+        for ann in db_anns:
+            announcements.append({
+                "title": ann.ann_title,
+                "date": str(ann.publish_date),
+                "time": str(ann.publish_date),
+                "sec_name": stock.stock_name if stock else "",
+                "url": ann.pdf_url or "",
+                "ann_type": ann.ann_type or "",
+            })
+    else:
+        # 数据库没有，实时获取并入库
+        try:
+            import akshare as ak
+            end_date = datetime.now().strftime("%Y%m%d")
+            start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
+            df_ann = ak.stock_individual_notice_report(
+                security=code_clean,
+                symbol="全部",
+                begin_date=start_date,
+                end_date=end_date,
+            )
+            if df_ann is not None and len(df_ann) > 0:
+                df_ann = df_ann.sort_values("公告日期", ascending=False)
+                # 入库
+                for _, row in df_ann.iterrows():
+                    ann_date = row.get("公告日期", "")
+                    ann_date_str = ""
+                    if ann_date is not None and str(ann_date) != "nan":
+                        try:
+                            ann_date_str = pd.Timestamp(ann_date).strftime("%Y-%m-%d")
+                        except Exception:
+                            ann_date_str = str(ann_date)[:10]
+                    announcements.append({
+                        "title": str(row.get("公告标题", "")),
+                        "date": ann_date_str,
+                        "time": ann_date_str,
+                        "sec_name": str(row.get("名称", "")),
+                        "url": str(row.get("网址", "")),
+                        "ann_type": str(row.get("公告类型", "")),
+                    })
+                    # 去重入库
                     try:
-                        ann_date_str = pd.Timestamp(ann_date).strftime("%Y-%m-%d")
+                        from datetime import date as date_type
+                        pub_date = None
+                        if ann_date_str:
+                            pub_date = datetime.strptime(ann_date_str, "%Y-%m-%d").date()
+                        if pub_date:
+                                existing = db.query(Announcement).filter(
+                                    Announcement.stock_code == code_clean,
+                                    Announcement.ann_title == str(row.get("公告标题", "")),
+                                    Announcement.publish_date == pub_date,
+                                ).first()
+                                if not existing:
+                                    ann_obj = Announcement(
+                                        stock_code=code_clean,
+                                        ann_title=str(row.get("公告标题", "")),
+                                        ann_type=str(row.get("公告类型", "")) or None,
+                                        publish_date=pub_date,
+                                        pdf_url=str(row.get("网址", "")) or None,
+                                        source="eastmoney",
+                                    )
+                                    db.add(ann_obj)
                     except Exception:
-                        ann_date_str = str(ann_date)[:10]
-                announcements.append({
-                    "title": str(row.get("公告标题", "")),
-                    "date": ann_date_str,
-                    "time": ann_date_str,
-                    "sec_name": str(row.get("名称", "")),
-                    "url": str(row.get("网址", "")),
-                    "ann_type": str(row.get("公告类型", "")),
-                })
-    except Exception as e:
-        announce_error = str(e)
-        log.warning("akshare stock_individual_notice_report 失败: %s", e)
+                        pass
+                db.commit()
+        except Exception as e:
+            announce_error = str(e)
+            log.warning("akshare stock_individual_notice_report 失败: %s", e)
 
     return success_response({
         "basic": basic_info,
         "profile": profile_data,
         "profile_error": profile_error,
-        "announcements": announcements,
+        "announcements": announcements[:20],  # 只返回前20条
         "announce_error": announce_error,
     })

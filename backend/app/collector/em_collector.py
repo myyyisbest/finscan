@@ -16,6 +16,7 @@ from typing import Optional
 from app.db import db_session
 from app.models import (
     StockBasic, FinReport, FinMainIndicator, CollectTaskLog, Watchlist, User,
+    Announcement,
 )
 
 log = logging.getLogger("collector.em")
@@ -494,3 +495,129 @@ def _update_log(code: str, task_type: str, status: str, error_msg: str = None, r
             session.commit()
     except Exception as e:
         log.warning("更新采集日志失败: %s", e)
+
+
+def collect_announcements(code: str, days: int = 180) -> int:
+    """采集单只股票的公告数据，存入 Announcement 表。返回新增条数。"""
+    code = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+    import akshare as ak
+    import pandas as pd
+    from datetime import datetime, timedelta
+
+    _update_log(code, "announcement", "collecting")
+    try:
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+        df = ak.stock_individual_notice_report(
+            security=code,
+            symbol="全部",
+            begin_date=start_date,
+            end_date=end_date,
+        )
+        if df is None or len(df) == 0:
+            _update_log(code, "announcement", "done", report_count=0)
+            return 0
+
+        added = 0
+        with db_session() as session:
+            for _, row in df.iterrows():
+                title = str(row.get("公告标题", "")).strip()
+                pub_date = _to_date(row.get("公告日期"))
+                if not title or not pub_date:
+                    continue
+
+                existing = session.query(Announcement).filter(
+                    Announcement.stock_code == code,
+                    Announcement.ann_title == title,
+                    Announcement.publish_date == pub_date,
+                ).first()
+                if existing:
+                    continue
+
+                ann = Announcement(
+                    stock_code=code,
+                    ann_title=title,
+                    ann_type=str(row.get("公告类型", "")) or None,
+                    publish_date=pub_date,
+                    pdf_url=str(row.get("网址", "")) or None,
+                    source="eastmoney",
+                )
+                session.add(ann)
+                added += 1
+            session.commit()
+
+        _update_log(code, "announcement", "done", report_count=added)
+        log.info("[%s] 公告采集完成，新增 %d 条", code, added)
+        return added
+    except Exception as e:
+        log.warning("[%s] 公告采集失败: %s", code, e)
+        _update_log(code, "announcement", "failed", str(e))
+        return 0
+
+
+def collect_company_profile(code: str) -> bool:
+    """采集公司简介，更新 StockBasic 表的扩展信息。"""
+    code = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+    import akshare as ak
+
+    _update_log(code, "profile", "collecting")
+    try:
+        df = ak.stock_profile_cninfo(symbol=code)
+        if df is None or len(df) == 0:
+            _update_log(code, "profile", "done")
+            return False
+
+        row = df.iloc[0]
+        with db_session() as session:
+            stock = session.query(StockBasic).filter(StockBasic.stock_code == code).first()
+            if stock:
+                full_name = str(row.get("公司名称", "")).strip()
+                industry = str(row.get("所属行业", "")).strip()
+                list_date = _to_date(row.get("上市日期"))
+                if full_name and full_name != "nan":
+                    stock.full_name = full_name
+                if industry and industry != "nan":
+                    stock.industry = industry
+                if list_date:
+                    stock.list_date = list_date
+                session.commit()
+
+        _update_log(code, "profile", "done")
+        log.info("[%s] 公司简介采集完成", code)
+        return True
+    except Exception as e:
+        log.warning("[%s] 公司简介采集失败: %s", code, e)
+        _update_log(code, "profile", "failed", str(e))
+        return False
+
+
+def collect_stock_full(code: str, stock_name: str = None) -> int:
+    """完整采集：财务数据 + 公告 + 公司简介。"""
+    code = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+    report_count = collect_stock_data(code, stock_name)
+    try:
+        collect_company_profile(code)
+    except Exception as e:
+        log.warning("[%s] 公司简介采集异常: %s", code, e)
+    try:
+        collect_announcements(code)
+    except Exception as e:
+        log.warning("[%s] 公告采集异常: %s", code, e)
+    return report_count
+
+
+def collect_watchlist_full(user_id: int):
+    """完整采集用户自选股：财务 + 公告 + 简介。"""
+    with db_session() as session:
+        stocks = (
+            session.query(Watchlist)
+            .filter(Watchlist.user_id == user_id)
+            .all()
+        )
+        stock_list = [(w.stock_code, w.stock_name) for w in stocks]
+    log.info("开始完整采集用户 %d 的 %d 只自选股", user_id, len(stock_list))
+    for code, name in stock_list:
+        try:
+            collect_stock_full(code, name)
+        except Exception as e:
+            log.error("[%s] 完整采集失败: %s", code, e)

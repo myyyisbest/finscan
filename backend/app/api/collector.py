@@ -33,15 +33,15 @@ async def trigger_collect(
         return fail_response("scope=single时必须提供stock_code")
 
     # 将采集任务放入后台执行
-    from app.collector.em_collector import collect_stock_data, collect_watchlist_data
+    from app.collector.em_collector import collect_stock_full, collect_watchlist_full
 
     if body.scope == "single":
         code = body.stock_code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
-        background_tasks.add_task(collect_stock_data, code)
+        background_tasks.add_task(collect_stock_full, code)
         return success_response({"task": f"collecting {code}", "status": "started"})
     else:
         user_id = current_user.id
-        background_tasks.add_task(collect_watchlist_data, user_id)
+        background_tasks.add_task(collect_watchlist_full, user_id)
         return success_response({"task": "collecting watchlist", "status": "started"})
 
 

@@ -25,9 +25,10 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def _incremental_collect():
-    """每日增量采集：抓取最近新增财报。"""
+    """每日增量采集：抓取最近新增财报 + 公告 + 公司简介。"""
     from app.collector.sina_adapter import collect_one_stock, _record_task_log
     from app.collector.em_indicator import collect_indicators
+    from app.collector.em_collector import collect_announcements, collect_company_profile
     from app.models import CollectTaskLog
     from app.db import db_session
     log.info("[Scheduler] 开始增量采集")
@@ -50,6 +51,8 @@ def _incremental_collect():
             try:
                 collect_one_stock(code)
                 collect_indicators(code)
+                collect_company_profile(code)
+                collect_announcements(code, days=7)  # 增量只采最近7天
             except Exception as exc:  # noqa: BLE001
                 log.warning("[Scheduler] 增量采集 %s 失败: %s", code, exc)
     except Exception as exc:  # noqa: BLE001
