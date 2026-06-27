@@ -628,12 +628,14 @@ async function confirmAdd() {
   }
 
   addLoading.value = true
+  const currentGroupId = groupId // 保存当前分组ID
   try {
     const res = await watchlistApi.add(code || name, undefined, groupId || 0)
     if (res.code === 0) {
       message.success('添加成功，可点击"采集"按钮获取财务数据')
       addModalVisible.value = false
-      addForm.value = { code: '', name: '', groupId: 0 }
+      // 只清空代码和名称，保留分组
+      addForm.value = { code: '', name: '', groupId: currentGroupId }
       loadWatchlist()
       loadGroups()
       loadAllWatchlist()

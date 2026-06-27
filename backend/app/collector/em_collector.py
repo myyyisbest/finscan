@@ -309,12 +309,14 @@ def collect_watchlist_data(user_id: int):
             .filter(Watchlist.user_id == user_id)
             .all()
         )
-    log.info("开始采集用户 %d 的 %d 只自选股", user_id, len(stocks))
-    for w in stocks:
+        # 在session内取出需要的数据，避免DetachedInstanceError
+        stock_list = [(w.stock_code, w.stock_name) for w in stocks]
+    log.info("开始采集用户 %d 的 %d 只自选股", user_id, len(stock_list))
+    for code, name in stock_list:
         try:
-            collect_stock_data(w.stock_code, w.stock_name)
+            collect_stock_data(code, name)
         except Exception as e:
-            log.error("[%s] 采集失败: %s", w.stock_code, e)
+            log.error("[%s] 采集失败: %s", code, e)
 
 
 def _clean_dict(d: dict) -> dict:
