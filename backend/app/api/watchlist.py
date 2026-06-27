@@ -178,15 +178,16 @@ def list_watchlist(
     for w in items:
         code = w.stock_code
         stock = db.query(StockBasic).filter(StockBasic.stock_code == code).first()
+        # 只取最新年报数据（避免季报/年化数据干扰展示）
         latest = (
             db.query(FinReport)
-            .filter(FinReport.stock_code == code)
+            .filter(FinReport.stock_code == code, FinReport.report_type == "Annual")
             .order_by(FinReport.report_date.desc())
             .first()
         )
         latest_ind = (
             db.query(FinMainIndicator)
-            .filter(FinMainIndicator.stock_code == code)
+            .filter(FinMainIndicator.stock_code == code, FinMainIndicator.report_type == "Annual")
             .order_by(FinMainIndicator.report_date.desc())
             .first()
         )

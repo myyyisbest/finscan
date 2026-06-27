@@ -1,29 +1,32 @@
 <template>
   <div class="home-page">
-    <!-- 顶部：分组Tab + 操作按钮 -->
+    <!-- 顶部：分组卡片 + 操作按钮 -->
     <div class="page-header">
-      <div class="group-tabs">
-        <a-tabs v-model:activeKey="activeGroupKey" @change="onGroupChange">
-          <a-tab-pane key="all">
-            <template #tab>全部</template>
-          </a-tab-pane>
-          <a-tab-pane v-for="g in groups" :key="g.id">
-            <template #tab>
-              <span class="group-tab">
-                {{ g.name }}
-                <span class="group-count">({{ g.stock_count }})</span>
-                <a-tag v-if="g.id !== 0" color="default" class="group-delete-btn" @click.stop="deleteGroup(g.id)">
-                  <CloseOutlined style="font-size: 10px" />
-                </a-tag>
-              </span>
-            </template>
-          </a-tab-pane>
-          <template #rightExtra>
-            <a-button type="text" size="small" @click="showAddGroupModal = true" class="add-group-btn">
-              <PlusOutlined /> 新建分组
-            </a-button>
-          </template>
-        </a-tabs>
+      <div class="group-cards">
+        <div
+          class="group-card"
+          :class="{ active: activeGroupKey === 'all' }"
+          @click="switchToGroup('all')"
+        >
+          <div class="group-card-name">全部</div>
+          <div class="group-card-count">{{ totalStockCount }}</div>
+        </div>
+        <div
+          v-for="g in groups.filter(x => x.id !== 0)"
+          :key="g.id"
+          class="group-card"
+          :class="{ active: activeGroupKey === String(g.id) }"
+          @click="switchToGroup(String(g.id))"
+        >
+          <div class="group-card-name">
+            <span class="group-dot" :style="{ background: getGroupColor(g.id) }"></span>
+            {{ g.name }}
+          </div>
+          <div class="group-card-count">{{ g.stock_count }}</div>
+        </div>
+        <div class="group-card add-group-card" @click="showAddGroupModal = true">
+          <PlusOutlined style="font-size: 20px; color: #999;" />
+        </div>
       </div>
       <div class="header-actions">
         <a-button type="primary" @click="refreshData" :loading="loading">
@@ -36,7 +39,7 @@
     </div>
 
     <!-- 分组统计卡片 -->
-    <div v-if="activeGroupKey === 'all'" class="summary-cards">
+    <div class="summary-cards">
       <a-card size="small" class="summary-card">
         <a-statistic title="股票数量" :value="watchlist.length" />
       </a-card>
@@ -52,6 +55,14 @@
     </div>
 
     <a-card class="watchlist-card">
+      <template #title>
+        <span>{{ activeGroupKey === 'all' ? '全部股票' : (groups.find(g => String(g.id) === activeGroupKey)?.name || '分组') }}</span>
+      </template>
+      <template #extra>
+        <a-button v-if="activeGroupKey !== 'all'" type="text" danger size="small" @click="deleteCurrentGroup">
+          <DeleteOutlined /> 删除分组
+        </a-button>
+      </template>
       <a-spin :spinning="loading">
         <a-table
           :columns="columns"
@@ -61,24 +72,16 @@
           :scroll="{ x: 1200 }"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'stock_name'">
+            <template v-if="column.key === 'group_name'">
+              <span class="group-tag" :style="{ background: getGroupColor(record.group_id || 0) }">
+                {{ record.group_name }}
+              </span>
+            </template>
+            <template v-else-if="column.key === 'stock_name'">
               <a @click="goToStock(record.stock_code)" class="stock-link">
                 <span class="stock-code">{{ record.stock_code }}</span>
                 <span class="stock-name-text">{{ record.stock_name }}</span>
               </a>
-            </template>
-            <template v-else-if="column.key === 'group_name'">
-              <a-dropdown>
-                <span class="group-badge">{{ record.group_name }}</span>
-                <template #overlay>
-                  <a-menu @click="({ key }) => moveToGroup(record.stock_code, key)">
-                    <a-menu-item key="0">默认分组</a-menu-item>
-                    <a-menu-item v-for="g in groups.filter(x => x.id !== 0)" :key="g.id">
-                      {{ g.name }}
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
             </template>
             <template v-else-if="column.key === 'action'">
               <div class="action-btns">
@@ -193,7 +196,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, ReloadOutlined, CloudDownloadOutlined, CloseOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ReloadOutlined, CloudDownloadOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { watchlistApi, stockApi, collectorApi, type WatchlistItem, type SearchResult } from '@/api/finance'
 
 const router = useRouter()
@@ -209,6 +212,21 @@ const activeGroupKey = ref('all')
 const showAddGroupModal = ref(false)
 const newGroupName = ref('')
 const addGroupLoading = ref(false)
+
+// 分组颜色映射
+const GROUP_COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16']
+function getGroupColor(groupId: number): string {
+  if (groupId === 0) return '#d9d9d9'
+  return GROUP_COLORS[(groupId - 1) % GROUP_COLORS.length]
+}
+
+// 总股票数
+const totalStockCount = computed(() => groups.value.find(g => g.id === 0)?.stock_count || watchlist.value.length)
+
+function switchToGroup(key: string) {
+  activeGroupKey.value = key
+  loadWatchlist()
+}
 
 // 添加股票表单
 const addModalVisible = ref(false)
@@ -233,8 +251,8 @@ const avgDebtRatio = computed(() => {
 })
 
 const columns = [
+  { title: '分组', key: 'group_name', width: 90 },
   { title: '股票', key: 'stock_name', width: 160, fixed: 'left' as const },
-  { title: '分组', key: 'group_name', width: 100 },
   { title: '最新报告期', key: 'latest_report', width: 120 },
   { title: '营业总收入(万)', key: 'total_revenue', width: 150, align: 'right' as const },
   { title: '归母净利润(万)', key: 'net_profit_parent', width: 150, align: 'right' as const },
@@ -271,10 +289,6 @@ async function loadWatchlist() {
   }
 }
 
-function onGroupChange() {
-  loadWatchlist()
-}
-
 async function confirmAddGroup() {
   if (!newGroupName.value.trim()) {
     message.warning('请输入分组名称')
@@ -297,28 +311,16 @@ async function confirmAddGroup() {
   }
 }
 
-async function deleteGroup(groupId: number) {
+async function deleteCurrentGroup() {
+  const groupId = parseInt(activeGroupKey.value)
   try {
     await watchlistApi.deleteGroup(groupId)
     message.success('分组已删除')
     await loadGroups()
-    if (activeGroupKey.value === String(groupId)) {
-      activeGroupKey.value = 'all'
-    }
+    activeGroupKey.value = 'all'
     loadWatchlist()
   } catch (e: any) {
     message.error(e?.response?.data?.message || '删除失败')
-  }
-}
-
-async function moveToGroup(stockCode: string, groupId: string | number) {
-  try {
-    await watchlistApi.moveStock(stockCode, Number(groupId))
-    message.success('已移动到分组')
-    loadWatchlist()
-    loadGroups()
-  } catch (e: any) {
-    message.error(e?.response?.data?.message || '移动失败')
   }
 }
 
@@ -436,11 +438,61 @@ onMounted(() => {
   gap: 16px;
 }
 
-.group-tabs { flex: 1; }
-.group-tab { display: inline-flex; align-items: center; gap: 4px; }
-.group-count { color: #999; font-size: 12px; }
-.group-delete-btn { margin-left: 4px; padding: 0 4px; height: 18px; line-height: 18px; }
-.add-group-btn { color: #1d4ed8; }
+.group-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.group-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 90px;
+  height: 64px;
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 8px 16px;
+}
+.group-card:hover {
+  border-color: #1d4ed8;
+  background: #f0f5ff;
+}
+.group-card.active {
+  border-color: #1d4ed8;
+  background: #e6f4ff;
+}
+.group-card-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.group-card-count {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+}
+.group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.add-group-card {
+  border-style: dashed;
+  color: #999;
+}
+.add-group-card:hover {
+  color: #1d4ed8;
+}
 
 .header-actions { display: flex; gap: 12px; flex-shrink: 0; }
 
@@ -458,7 +510,13 @@ onMounted(() => {
 .stock-link:hover .stock-name-text { color: #1d4ed8; }
 .stock-code { font-size: 12px; color: #999; }
 .stock-name-text { font-size: 14px; font-weight: 500; color: #1a1a1a; }
-.group-badge { font-size: 12px; color: #666; cursor: pointer; }
+.group-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #fff;
+}
 .no-data { color: #ccc; }
 
 .profit-pos { color: #cf1322; }
