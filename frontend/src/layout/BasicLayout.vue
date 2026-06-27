@@ -98,6 +98,7 @@ onUnmounted(() => {
 <style scoped>
 .basic-layout {
   min-height: 100vh;
+  min-height: 100dvh; /* 动态视口高度，适配移动端 */
 }
 
 .sidebar-container {
@@ -111,11 +112,17 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
   height: 56px;
   line-height: 56px;
+  /* iOS 安全区域 */
+  padding-top: env(safe-area-inset-top, 0);
+  padding-left: env(safe-area-inset-left, 16px);
+  padding-right: env(safe-area-inset-right, 16px);
 }
 
 .header-left {
@@ -160,12 +167,14 @@ onUnmounted(() => {
 .content {
   margin: 16px;
   min-height: calc(100vh - 56px - 32px);
+  min-height: calc(100dvh - 56px - 32px);
 }
 
 .content-mobile {
   margin: 0;
   padding: 12px;
-  min-height: calc(100vh - 56px);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
+  min-height: calc(100dvh - 56px);
   overflow-x: hidden;
 }
 
@@ -186,10 +195,24 @@ onUnmounted(() => {
 @media (max-width: 767px) {
   .header {
     padding: 0 12px;
+    padding-top: env(safe-area-inset-top, 0);
   }
 
   .logo {
     font-size: 16px;
+  }
+}
+
+/* 19.5:9 窄屏适配 */
+@media (max-width: 400px) {
+  .header {
+    height: 50px;
+    line-height: 50px;
+  }
+
+  .content-mobile {
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 20px));
   }
 }
 </style>

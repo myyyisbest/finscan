@@ -1393,7 +1393,8 @@ onUnmounted(() => {
 
 @media (max-width: 640px) {
   .finscan-page {
-    padding: 16px;
+    padding: 12px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 20px));
   }
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1406,6 +1407,273 @@ onUnmounted(() => {
   }
   .section-content {
     padding: 16px;
+  }
+}
+
+/* ========== 19.5:9 窄屏深度适配 ========== */
+@media (max-width: 480px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .header-left {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .page-title {
+    font-size: 18px;
+    margin: 0;
+  }
+
+  .page-subtitle {
+    display: none;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .header-actions :deep(.ant-select),
+  .header-actions :deep(.ant-select-affix-wrapper) {
+    width: 100% !important;
+  }
+
+  .header-actions :deep(.ant-btn) {
+    width: 100%;
+    height: 44px;
+    font-size: 15px;
+  }
+
+  .risk-dashboard {
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .risk-gauge-card {
+    padding: 20px 16px;
+  }
+
+  .gauge-content {
+    gap: 14px;
+  }
+
+  .gauge-ring {
+    width: 90px;
+    height: 90px;
+  }
+
+  .gauge-score {
+    font-size: 28px;
+  }
+
+  .gauge-level {
+    font-size: 18px;
+  }
+
+  .stats-grid {
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .stat-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .stat-number {
+    font-size: 20px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  .stock-name {
+    font-size: 20px;
+  }
+
+  .stock-code {
+    font-size: 14px;
+  }
+
+  .stock-meta {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .meta-item {
+    font-size: 12px;
+  }
+
+  .section-tabs {
+    overflow-x: auto;
+    gap: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-item {
+    padding: 10px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .tab-filter {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .section-content {
+    padding: 14px;
+  }
+
+  .layers-grid {
+    gap: 14px;
+  }
+
+  .layer-header {
+    padding: 12px 14px;
+  }
+
+  .layer-title {
+    font-size: 13px;
+  }
+
+  .layer-score {
+    font-size: 13px;
+  }
+
+  .rule-card-body {
+    padding: 12px 14px;
+  }
+
+  .rule-card-detail {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .legend-section {
+    padding: 16px;
+  }
+
+  .legend-items {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .legend-item {
+    gap: 8px;
+  }
+
+  .legend-bar {
+    width: 3px;
+    height: 28px;
+  }
+
+  .legend-label {
+    font-size: 12px;
+  }
+
+  .legend-range {
+    font-size: 10px;
+  }
+
+  .empty-state {
+    padding: 40px 16px;
+  }
+
+  .empty-illustration {
+    font-size: 60px;
+  }
+
+  .empty-title {
+    font-size: 18px;
+  }
+
+  .empty-desc {
+    font-size: 13px;
+  }
+
+  .empty-features {
+    gap: 12px;
+  }
+
+  .feature-item {
+    padding: 12px 16px;
+    font-size: 12px;
+  }
+
+  .feature-icon {
+    font-size: 24px;
+  }
+
+  .loading-content {
+    padding: 32px 24px;
+  }
+
+  .loading-animation {
+    width: 80px;
+    height: 80px;
+  }
+
+  .loading-icon {
+    font-size: 26px;
+  }
+
+  .loading-title {
+    font-size: 16px;
+  }
+
+  .loading-desc {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 380px) {
+  .finscan-page {
+    padding: 10px;
+  }
+
+  .risk-gauge-card {
+    padding: 16px 12px;
+  }
+
+  .gauge-ring {
+    width: 80px;
+    height: 80px;
+  }
+
+  .gauge-score {
+    font-size: 24px;
+  }
+
+  .stats-grid {
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 12px;
+  }
+
+  .stat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .stat-number {
+    font-size: 18px;
   }
 }
 

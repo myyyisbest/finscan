@@ -656,7 +656,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.home-page { min-height: calc(100vh - 96px); }
+.home-page { min-height: calc(100vh - 96px); min-height: calc(100dvh - 96px); }
 
 .fade-in { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -665,8 +665,10 @@ onMounted(() => {
 .view-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 .view-title {
   font-size: 24px;
@@ -679,7 +681,7 @@ onMounted(() => {
   color: #999;
   margin: 4px 0 0 0;
 }
-.header-actions { display: flex; gap: 12px; }
+.header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
 .group-cards-grid {
   display: grid;
@@ -899,4 +901,92 @@ onMounted(() => {
   z-index: 100;
 }
 .fab-btn:hover { transform: scale(1.08); }
+
+/* ========== 移动端适配 (19.5:9 窄屏) ========== */
+@media (max-width: 767px) {
+  .view-header {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .view-title {
+    font-size: 20px;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions :deep(.ant-btn) {
+    flex: 1;
+  }
+
+  .group-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .group-card {
+    padding: 16px;
+  }
+
+  .card-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  .card-content {
+    gap: 12px;
+  }
+
+  .card-stats {
+    gap: 12px;
+  }
+
+  /* 列表视图移动端 */
+  .list-header {
+    flex-wrap: wrap;
+  }
+
+  .watchlist-card :deep(.ant-table-wrapper) {
+    font-size: 13px;
+  }
+
+  .fab-btn {
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0));
+    width: 56px;
+    height: 56px;
+  }
+}
+
+@media (max-width: 400px) {
+  .home-page {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+  }
+
+  .view-title {
+    font-size: 18px;
+  }
+
+  .group-card {
+    padding: 14px;
+  }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .card-title {
+    font-size: 16px;
+  }
+
+  .stat-value {
+    font-size: 14px;
+  }
+}
 </style>
