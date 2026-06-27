@@ -1,5 +1,5 @@
 """Finscan 排雷 API"""
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
 from typing import Optional
