@@ -1381,4 +1381,46 @@ onUnmounted(() => {
     padding: 16px;
   }
 }
+
+/* 修复搜索框白色字体白色背景问题 */
+:deep(.ant-select) {
+  .ant-select-selector {
+    background: #fff !important;
+    border-color: #e2e8f0 !important;
+
+    .ant-select-selection-placeholder,
+    .ant-select-selection-search-input,
+    .ant-select-selection-item {
+      color: #374151 !important;
+    }
+  }
+
+  &:not(.ant-select-disabled):hover .ant-select-selector {
+    border-color: #3b82f6 !important;
+  }
+
+  &.ant-select-focused .ant-select-selector {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+  }
+}
+
+/* 修复下拉菜单 */
+:deep(.ant-select-dropdown) {
+  background: #fff !important;
+
+  .ant-select-item {
+    color: #374151 !important;
+
+    &.ant-select-item-option-selected {
+      background: #eff6ff !important;
+      color: #3b82f6 !important;
+      font-weight: 500;
+    }
+
+    &.ant-select-item-option-active {
+      background: #f8fafc !important;
+    }
+  }
+}
 </style>
