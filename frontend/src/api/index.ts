@@ -11,6 +11,21 @@ api.interceptors.request.use(config => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  if (config.method === 'get' && config.params) {
+    const encodedParams: Record<string, string> = {}
+    for (const key of Object.keys(config.params)) {
+      const val = config.params[key]
+      if (val !== undefined && val !== null && val !== '') {
+        encodedParams[key] = encodeURIComponent(encodeURIComponent(String(val)))
+      }
+    }
+    config.params = encodedParams
+    config.paramsSerializer = (params: any) => {
+      return Object.entries(params)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('&')
+    }
+  }
   return config
 })
 
