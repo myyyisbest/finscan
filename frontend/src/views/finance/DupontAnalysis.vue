@@ -38,53 +38,52 @@
             <div v-if="expandedKeys.has('roe')" class="tree-level tree-level-1">
               <template v-for="(child, idx) in roeNode.children" :key="child.key">
                 <span v-if="idx > 0" class="op-symbol">×</span>
-                <div class="tree-node" @click="onNodeClick(child.key)">
-                  <div
-                    class="node-card node-card-l1"
-                    :class="{ active: selectedKey === child.key, expandable: child.children?.length }"
-                  >
-                    <div class="node-label">{{ child.name }}</div>
-                    <div class="node-value">
-                      {{ formatVal(child.value) }}<span class="node-unit">{{ child.unit }}</span>
+                <div class="tree-node-with-sub">
+                  <div class="tree-node" @click="onNodeClick(child.key)">
+                    <div
+                      class="node-card node-card-l1"
+                      :class="{ active: selectedKey === child.key, expandable: child.children?.length }"
+                    >
+                      <div class="node-label">{{ child.name }}</div>
+                      <div class="node-value">
+                        {{ formatVal(child.value) }}<span class="node-unit">{{ child.unit }}</span>
+                      </div>
+                      <div v-if="child.yoy != null" class="node-yoy" :class="child.yoy >= 0 ? 'yoy-up' : 'yoy-down'">
+                        同比 {{ child.yoy >= 0 ? '+' : '' }}{{ child.yoy }}%
+                      </div>
+                      <div v-if="child.children?.length" class="expand-hint">
+                        {{ expandedKeys.has(child.key) ? '▼ 已展开' : '▶ 可展开' }}
+                      </div>
                     </div>
-                    <div v-if="child.yoy != null" class="node-yoy" :class="child.yoy >= 0 ? 'yoy-up' : 'yoy-down'">
-                      同比 {{ child.yoy >= 0 ? '+' : '' }}{{ child.yoy }}%
-                    </div>
-                    <div v-if="child.children?.length" class="expand-hint">
-                      {{ expandedKeys.has(child.key) ? '▼ 已展开' : '▶ 可展开' }}
+                  </div>
+                  <!-- 二级驱动：在对应父节点下方展开 -->
+                  <div v-if="expandedKeys.has(child.key) && child.children?.length" class="subtree-wrapper">
+                    <div class="connector"></div>
+                    <div class="tree-level tree-level-2">
+                      <div
+                        v-for="sub in child.children"
+                        :key="sub.key"
+                        class="tree-node"
+                        @click="onNodeClick(sub.key)"
+                      >
+                        <div
+                          class="node-card node-card-l2"
+                          :class="{ active: selectedKey === sub.key }"
+                        >
+                          <div class="node-label">{{ sub.name }}</div>
+                          <div class="node-value">
+                            {{ formatVal(sub.value) }}<span class="node-unit">{{ sub.unit }}</span>
+                          </div>
+                          <div v-if="sub.yoy != null" class="node-yoy" :class="sub.yoy >= 0 ? 'yoy-up' : 'yoy-down'">
+                            同比 {{ sub.yoy >= 0 ? '+' : '' }}{{ sub.yoy }}%
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </template>
             </div>
-
-            <!-- 二级驱动 -->
-            <template v-for="child in roeNode.children" :key="`sub-${child.key}`">
-              <div v-if="expandedKeys.has(child.key) && child.children?.length" class="subtree-wrapper">
-                <div class="connector"></div>
-                <div class="tree-level tree-level-2">
-                  <div
-                    v-for="sub in child.children"
-                    :key="sub.key"
-                    class="tree-node"
-                    @click="onNodeClick(sub.key)"
-                  >
-                    <div
-                      class="node-card node-card-l2"
-                      :class="{ active: selectedKey === sub.key }"
-                    >
-                      <div class="node-label">{{ sub.name }}</div>
-                      <div class="node-value">
-                        {{ formatVal(sub.value) }}<span class="node-unit">{{ sub.unit }}</span>
-                      </div>
-                      <div v-if="sub.yoy != null" class="node-yoy" :class="sub.yoy >= 0 ? 'yoy-up' : 'yoy-down'">
-                        同比 {{ sub.yoy >= 0 ? '+' : '' }}{{ sub.yoy }}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
 
             <!-- 资产质量分组 -->
             <template v-if="assetQualityNode && assetQualityNode.children?.length">
@@ -498,11 +497,14 @@ watch(() => props.stockCode, (val) => {
   font-weight: 400;
 }
 .node-card-root .node-yoy {
-  color: #16a34a !important;
+  color: #6b7280 !important;
   font-size: 12px;
 }
-.node-card-root .node-yoy.yoy-down {
+.node-card-root .node-yoy.yoy-up {
   color: #dc2626 !important;
+}
+.node-card-root .node-yoy.yoy-down {
+  color: #16a34a !important;
 }
 .node-card-root .expand-hint {
   color: #6b7280 !important;
@@ -585,10 +587,16 @@ watch(() => props.stockCode, (val) => {
   text-align: center;
 }
 
+.tree-node-with-sub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .tree-level {
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
 }
