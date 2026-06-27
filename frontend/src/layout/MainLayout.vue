@@ -59,6 +59,10 @@
             <span class="nav-icon">📋</span>
             <span class="nav-text">多标对比</span>
           </router-link>
+          <router-link to="/analysis" class="nav-item" :class="{ active: route.path.startsWith('/analysis') || route.path.startsWith('/stock/') }">
+            <span class="nav-icon">📈</span>
+            <span class="nav-text">财报分析</span>
+          </router-link>
         </nav>
       </aside>
 

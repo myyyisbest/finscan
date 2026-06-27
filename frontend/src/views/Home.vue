@@ -1,151 +1,199 @@
 <template>
   <div class="home-page">
-    <!-- 顶部：分组卡片 + 操作按钮 -->
-    <div class="page-header">
-      <div class="group-cards">
-        <div
-          class="group-card"
-          :class="{ active: activeGroupKey === 'all' }"
-          @click="switchToGroup('all')"
-        >
-          <div class="group-card-name">全部</div>
-          <div class="group-card-count">{{ totalStockCount }}</div>
+    <!-- 分组卡片视图（首页） -->
+    <div v-if="viewMode === 'cards'" class="group-cards-view fade-in">
+      <div class="view-header">
+        <div>
+          <h1 class="view-title">我的自选分组</h1>
+          <p class="view-subtitle">管理您的股票分组与持仓跟踪</p>
         </div>
-        <div
-          v-for="g in groups.filter(x => x.id !== 0)"
-          :key="g.id"
-          class="group-card"
-          :class="{ active: activeGroupKey === String(g.id) }"
-          @click="switchToGroup(String(g.id))"
-        >
-          <div class="group-card-name">
-            <span class="group-dot" :style="{ background: getGroupColor(g.id) }"></span>
-            {{ g.name }}
-          </div>
-          <div class="group-card-count">{{ g.stock_count }}</div>
-        </div>
-        <div class="group-card add-group-card" @click="showAddGroupModal = true">
-          <PlusOutlined style="font-size: 20px; color: #999;" />
+        <div class="header-actions">
+          <a-button type="primary" @click="showAddGroupModal = true">
+            <PlusOutlined /> 新建分组
+          </a-button>
+          <a-button @click="collectAll" :loading="collecting">
+            <CloudDownloadOutlined /> 采集全部
+          </a-button>
         </div>
       </div>
-      <div class="header-actions">
-        <a-button type="primary" @click="refreshData" :loading="loading">
-          <ReloadOutlined /> 刷新
-        </a-button>
-        <a-button @click="collectAll" :loading="collecting">
-          <CloudDownloadOutlined /> 采集
-        </a-button>
-      </div>
-    </div>
 
-    <!-- 分组统计卡片 -->
-    <div class="summary-cards">
-      <a-card size="small" class="summary-card">
-        <a-statistic title="股票数量" :value="watchlist.length" />
-      </a-card>
-      <a-card size="small" class="summary-card">
-        <a-statistic title="已采集" :value="watchlist.filter(w => w.latest_report).length" />
-      </a-card>
-      <a-card size="small" class="summary-card">
-        <a-statistic title="平均ROE" :value="avgRoe" :precision="2" suffix="%" />
-      </a-card>
-      <a-card size="small" class="summary-card">
-        <a-statistic title="平均资产负债率" :value="avgDebtRatio" :precision="2" suffix="%" />
-      </a-card>
-    </div>
-
-    <a-card class="watchlist-card">
-      <template #title>
-        <span>{{ activeGroupKey === 'all' ? '全部股票' : (groups.find(g => String(g.id) === activeGroupKey)?.name || '分组') }}</span>
-      </template>
-      <template #extra>
-        <a-button v-if="activeGroupKey !== 'all'" type="text" danger size="small" @click="deleteCurrentGroup">
-          <DeleteOutlined /> 删除分组
-        </a-button>
-      </template>
-      <a-spin :spinning="loading">
-        <a-table
-          :columns="columns"
-          :data-source="watchlist"
-          :pagination="{ pageSize: 20 }"
-          row-key="stock_code"
-          :scroll="{ x: 1200 }"
-        >
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'group_name'">
-              <span class="group-tag" :style="{ background: getGroupColor(record.group_id || 0) }">
-                {{ record.group_name }}
-              </span>
-            </template>
-            <template v-else-if="column.key === 'stock_name'">
-              <a @click="goToStock(record.stock_code)" class="stock-link">
-                <span class="stock-code">{{ record.stock_code }}</span>
-                <span class="stock-name-text">{{ record.stock_name }}</span>
-              </a>
-            </template>
-            <template v-else-if="column.key === 'action'">
-              <div class="action-btns">
-                <a-button type="link" size="small" @click.stop="collectStock(record)" :loading="collectingMap[record.stock_code]">
-                  <CloudDownloadOutlined /> 采集
-                </a-button>
-                <a-button type="link" danger size="small" @click.stop="removeStock(record)">
-                  移除
-                </a-button>
+      <div class="group-cards-grid">
+        <!-- 全部公司卡片 -->
+        <div class="group-card card-hover" @click="openGroupDetail('all')">
+          <div class="card-gradient gradient-all"></div>
+          <div class="card-content">
+            <div class="card-icon icon-all">
+              <AppstoreOutlined />
+            </div>
+            <div class="card-info">
+              <h3 class="card-title">全部公司</h3>
+              <p class="card-desc">查看所有自选股票</p>
+              <div class="card-stats">
+                <div class="stat-item">
+                  <span class="stat-label">股票数</span>
+                  <span class="stat-value">{{ totalCount }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">平均ROE</span>
+                  <span class="stat-value">{{ allAvgRoe }}%</span>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 各分组卡片 -->
+        <div
+          v-for="g in groups"
+          :key="g.id"
+          class="group-card card-hover"
+          @click="openGroupDetail(String(g.id))"
+        >
+          <div class="card-gradient" :style="{ background: `linear-gradient(135deg, ${getGroupColor(g.id)}22 0%, ${getGroupColor(g.id)}05 100%)` }"></div>
+          <div class="card-content">
+            <div class="card-icon" :style="{ background: getGroupColor(g.id) }">
+              <FolderOutlined />
+            </div>
+            <div class="card-info">
+              <h3 class="card-title">{{ g.name }}</h3>
+              <p class="card-desc">共 {{ g.stock_count }} 只股票</p>
+              <div class="card-stats">
+                <div class="stat-item">
+                  <span class="stat-label">股票数</span>
+                  <span class="stat-value">{{ g.stock_count }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">已采集</span>
+                  <span class="stat-value">{{ getGroupCollectedCount(g.id) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 新建分组卡片 -->
+        <div class="group-card add-card" @click="showAddGroupModal = true">
+          <div class="add-card-inner">
+            <div class="add-icon">
+              <PlusOutlined />
+            </div>
+            <span class="add-text">新建分组</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分组详情（列表视图） -->
+    <div v-if="viewMode === 'list'" class="group-list-view fade-in">
+      <div class="list-header">
+        <a-button class="back-btn" @click="backToCards">
+          <ArrowLeftOutlined /> 返回
+        </a-button>
+        <div class="list-title-area">
+          <h2 class="list-title">{{ currentGroupTitle }}</h2>
+          <p class="list-subtitle">共 {{ watchlist.length }} 只股票</p>
+        </div>
+        <a-space>
+          <a-button @click="collectAll" :loading="collecting">
+            <CloudDownloadOutlined /> 采集本组
+          </a-button>
+          <a-button type="primary" @click="addModalVisible = true">
+            <PlusOutlined /> 添加股票
+          </a-button>
+        </a-space>
+      </div>
+
+      <a-card class="watchlist-card">
+        <a-spin :spinning="loading">
+          <a-table
+            :columns="columns"
+            :data-source="watchlist"
+            :pagination="{ pageSize: 20 }"
+            row-key="stock_code"
+            :scroll="{ x: 1100 }"
+            size="middle"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'group_name'">
+                <span class="group-tag" :style="{ background: getGroupColor(record.group_id || 0) }">
+                  {{ record.group_name }}
+                </span>
+              </template>
+              <template v-else-if="column.key === 'stock_name'">
+                <a @click="goToStock(record.stock_code)" class="stock-link">
+                  <span class="stock-code">{{ record.stock_code }}</span>
+                  <span class="stock-name-text">{{ record.stock_name }}</span>
+                </a>
+              </template>
+              <template v-else-if="column.key === 'fin_analysis'">
+                <a-button type="link" size="small" @click="goToStock(record.stock_code)">
+                  <LineChartOutlined /> 财报分析
+                </a-button>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <div class="action-btns">
+                  <a-button type="link" size="small" @click.stop="collectStock(record)" :loading="collectingMap[record.stock_code]">
+                    <CloudDownloadOutlined /> 采集
+                  </a-button>
+                  <a-button type="link" danger size="small" @click.stop="removeStock(record)">
+                    移除
+                  </a-button>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'latest_report'">
+                <span v-if="record.latest_report">{{ record.latest_report.report_name }}</span>
+                <span v-else class="no-data">未采集</span>
+              </template>
+              <template v-else-if="column.key === 'total_revenue'">
+                <span v-if="record.latest_report?.total_revenue">
+                  {{ formatWan(record.latest_report.total_revenue) }}
+                </span>
+                <span v-else>-</span>
+              </template>
+              <template v-else-if="column.key === 'net_profit_parent'">
+                <span v-if="record.latest_report?.net_profit_parent"
+                  :class="getProfitClass(record.latest_report.net_profit_parent)">
+                  {{ formatWan(record.latest_report.net_profit_parent) }}
+                </span>
+                <span v-else>-</span>
+              </template>
+              <template v-else-if="column.key === 'roe'">
+                <span v-if="record.latest_report?.roe != null"
+                  :class="getRoeClass(record.latest_report.roe)">
+                  {{ record.latest_report.roe?.toFixed(2) }}%
+                </span>
+                <span v-else>-</span>
+              </template>
+              <template v-else-if="column.key === 'debt_ratio'">
+                <span v-if="record.latest_report?.debt_ratio != null">
+                  {{ record.latest_report.debt_ratio?.toFixed(2) }}%
+                </span>
+                <span v-else>-</span>
+              </template>
+              <template v-else-if="column.key === 'revenue_yoy'">
+                <span v-if="record.latest_report?.revenue_yoy != null"
+                  :class="getYoyClass(record.latest_report.revenue_yoy)">
+                  {{ record.latest_report.revenue_yoy?.toFixed(2) }}%
+                </span>
+                <span v-else>-</span>
+              </template>
+              <template v-else-if="column.key === 'net_profit_yoy'">
+                <span v-if="record.latest_report?.net_profit_yoy != null"
+                  :class="getYoyClass(record.latest_report.net_profit_yoy)">
+                  {{ record.latest_report.net_profit_yoy?.toFixed(2) }}%
+                </span>
+                <span v-else>-</span>
+              </template>
             </template>
-            <template v-else-if="column.key === 'latest_report'">
-              <span v-if="record.latest_report">{{ record.latest_report.report_name }}</span>
-              <span v-else class="no-data">未采集</span>
+          </a-table>
+          <a-empty v-if="!loading && watchlist.length === 0" description="暂无自选股">
+            <template #description>
+              <span>暂无自选股，点击右上角按钮添加股票</span>
             </template>
-            <template v-else-if="column.key === 'total_revenue'">
-              <span v-if="record.latest_report?.total_revenue">
-                {{ formatWan(record.latest_report.total_revenue) }}
-              </span>
-              <span v-else>-</span>
-            </template>
-            <template v-else-if="column.key === 'net_profit_parent'">
-              <span v-if="record.latest_report?.net_profit_parent"
-                :class="getProfitClass(record.latest_report.net_profit_parent)">
-                {{ formatWan(record.latest_report.net_profit_parent) }}
-              </span>
-              <span v-else>-</span>
-            </template>
-            <template v-else-if="column.key === 'roe'">
-              <span v-if="record.latest_report?.roe != null"
-                :class="getRoeClass(record.latest_report.roe)">
-                {{ record.latest_report.roe?.toFixed(2) }}%
-              </span>
-              <span v-else>-</span>
-            </template>
-            <template v-else-if="column.key === 'debt_ratio'">
-              <span v-if="record.latest_report?.debt_ratio != null">
-                {{ record.latest_report.debt_ratio?.toFixed(2) }}%
-              </span>
-              <span v-else>-</span>
-            </template>
-            <template v-else-if="column.key === 'revenue_yoy'">
-              <span v-if="record.latest_report?.revenue_yoy != null"
-                :class="getYoyClass(record.latest_report.revenue_yoy)">
-                {{ record.latest_report.revenue_yoy?.toFixed(2) }}%
-              </span>
-              <span v-else>-</span>
-            </template>
-            <template v-else-if="column.key === 'net_profit_yoy'">
-              <span v-if="record.latest_report?.net_profit_yoy != null"
-                :class="getYoyClass(record.latest_report.net_profit_yoy)">
-                {{ record.latest_report.net_profit_yoy?.toFixed(2) }}%
-              </span>
-              <span v-else>-</span>
-            </template>
-          </template>
-        </a-table>
-        <a-empty v-if="!loading && watchlist.length === 0" description="暂无自选股">
-          <template #description>
-            <span>暂无自选股，点击右下角按钮添加股票</span>
-          </template>
-        </a-empty>
-      </a-spin>
-    </a-card>
+          </a-empty>
+        </a-spin>
+      </a-card>
+    </div>
 
     <!-- 添加股票弹窗 -->
     <a-modal
@@ -155,6 +203,7 @@
       :confirm-loading="addLoading"
       okText="添加"
       cancelText="取消"
+      :width="480"
     >
       <div class="add-form">
         <div class="form-row">
@@ -189,8 +238,9 @@
       :confirm-loading="addGroupLoading"
       okText="创建"
       cancelText="取消"
+      :width="400"
     >
-      <a-input v-model:value="newGroupName" placeholder="请输入分组名称" />
+      <a-input v-model:value="newGroupName" placeholder="请输入分组名称" size="large" />
     </a-modal>
 
     <div class="fab-btn" @click="addModalVisible = true" title="添加自选股">
@@ -203,19 +253,26 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, ReloadOutlined, CloudDownloadOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import {
+  PlusOutlined, CloudDownloadOutlined, ArrowLeftOutlined,
+  AppstoreOutlined, FolderOutlined, LineChartOutlined
+} from '@ant-design/icons-vue'
 import { watchlistApi, stockApi, collectorApi, type WatchlistItem, type SearchResult } from '@/api/finance'
 
 const router = useRouter()
 const loading = ref(false)
 const collecting = ref(false)
 const watchlist = ref<WatchlistItem[]>([])
+const allWatchlist = ref<WatchlistItem[]>([])
 const collectingMap = ref<Record<string, boolean>>({})
+
+// 视图模式
+const viewMode = ref<'cards' | 'list'>('cards')
+const currentGroupId = ref('all')
 
 // 分组相关
 interface Group { id: number; name: string; stock_count: number }
 const groups = ref<Group[]>([])
-const activeGroupKey = ref('all')
 const showAddGroupModal = ref(false)
 const newGroupName = ref('')
 const addGroupLoading = ref(false)
@@ -223,16 +280,8 @@ const addGroupLoading = ref(false)
 // 分组颜色映射
 const GROUP_COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16']
 function getGroupColor(groupId: number): string {
-  if (groupId === 0) return '#d9d9d9'
+  if (groupId === 0) return '#8c8c8c'
   return GROUP_COLORS[(groupId - 1) % GROUP_COLORS.length]
-}
-
-// 总股票数
-const totalStockCount = computed(() => groups.value.find(g => g.id === 0)?.stock_count || watchlist.value.length)
-
-function switchToGroup(key: string) {
-  activeGroupKey.value = key
-  loadWatchlist()
 }
 
 // 添加股票表单
@@ -240,23 +289,26 @@ const addModalVisible = ref(false)
 const addForm = ref({ code: '', name: '', groupId: 0 })
 const addLoading = ref(false)
 
-// 计算属性
-const avgRoe = computed(() => {
-  const roes = watchlist.value
+// 总股票数
+const totalCount = computed(() => allWatchlist.value.length)
+
+// 全部平均ROE
+const allAvgRoe = computed(() => {
+  const roes = allWatchlist.value
     .filter(w => w.latest_report?.roe != null)
     .map(w => w.latest_report!.roe!)
-  if (roes.length === 0) return 0
-  return roes.reduce((a, b) => a + b, 0) / roes.length
+  if (roes.length === 0) return '0.00'
+  return (roes.reduce((a, b) => a + b, 0) / roes.length).toFixed(2)
 })
 
-const avgDebtRatio = computed(() => {
-  const ratios = watchlist.value
-    .filter(w => w.latest_report?.debt_ratio != null)
-    .map(w => w.latest_report!.debt_ratio!)
-  if (ratios.length === 0) return 0
-  return ratios.reduce((a, b) => a + b, 0) / ratios.length
+// 当前分组标题
+const currentGroupTitle = computed(() => {
+  if (currentGroupId.value === 'all') return '全部公司'
+  const g = groups.value.find(x => String(x.id) === currentGroupId.value)
+  return g?.name || '分组'
 })
 
+// 列表列定义
 const columns = [
   { title: '分组', key: 'group_name', width: 80 },
   { title: '股票', key: 'stock_name', width: 130, fixed: 'left' as const },
@@ -267,8 +319,26 @@ const columns = [
   { title: '资产负债率', key: 'debt_ratio', width: 90, align: 'right' as const },
   { title: '营收同比', key: 'revenue_yoy', width: 80, align: 'right' as const },
   { title: '利润同比', key: 'net_profit_yoy', width: 80, align: 'right' as const },
+  { title: '财报分析', key: 'fin_analysis', width: 90, align: 'center' as const },
   { title: '操作', key: 'action', width: 80, align: 'center' as const, fixed: 'right' as const },
 ]
+
+// 获取分组已采集数量
+function getGroupCollectedCount(groupId: number): number {
+  return allWatchlist.value.filter(w => (w.group_id || 0) === groupId && w.latest_report).length
+}
+
+// 打开分组详情
+function openGroupDetail(groupId: string) {
+  currentGroupId.value = groupId
+  viewMode.value = 'list'
+  loadWatchlist(groupId)
+}
+
+// 返回卡片视图
+function backToCards() {
+  viewMode.value = 'cards'
+}
 
 async function loadGroups() {
   try {
@@ -281,11 +351,22 @@ async function loadGroups() {
   }
 }
 
-async function loadWatchlist() {
+async function loadAllWatchlist() {
+  try {
+    const res = await watchlistApi.list()
+    if (res.code === 0) {
+      allWatchlist.value = res.data || []
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function loadWatchlist(groupId: string = currentGroupId.value) {
   loading.value = true
   try {
-    const groupId = activeGroupKey.value === 'all' ? null : parseInt(activeGroupKey.value)
-    const res = await watchlistApi.list(groupId ?? undefined)
+    const gid = groupId === 'all' ? undefined : parseInt(groupId)
+    const res = await watchlistApi.list(gid)
     if (res.code === 0) {
       watchlist.value = res.data || []
     }
@@ -309,26 +390,11 @@ async function confirmAddGroup() {
     showAddGroupModal.value = false
     newGroupName.value = ''
     await loadGroups()
-    // 切换到新建的分组
-    const g = groups.value.find(x => x.name === newGroupName.value.trim())
-    if (g) activeGroupKey.value = String(g.id)
+    await loadAllWatchlist()
   } catch (e: any) {
     message.error(e?.response?.data?.message || '创建失败')
   } finally {
     addGroupLoading.value = false
-  }
-}
-
-async function deleteCurrentGroup() {
-  const groupId = parseInt(activeGroupKey.value)
-  try {
-    await watchlistApi.deleteGroup(groupId)
-    message.success('分组已删除')
-    await loadGroups()
-    activeGroupKey.value = 'all'
-    loadWatchlist()
-  } catch (e: any) {
-    message.error(e?.response?.data?.message || '删除失败')
   }
 }
 
@@ -364,14 +430,10 @@ async function removeStock(record: WatchlistItem) {
     message.success('已移除')
     loadWatchlist()
     loadGroups()
+    loadAllWatchlist()
   } catch (e) {
     message.error('移除失败')
   }
-}
-
-async function refreshData() {
-  await loadWatchlist()
-  message.success('已刷新')
 }
 
 async function collectAll() {
@@ -379,7 +441,10 @@ async function collectAll() {
   try {
     await collectorApi.triggerCollect('watchlist')
     message.success('采集任务已启动，请稍候刷新查看')
-    setTimeout(() => { loadWatchlist() }, 5000)
+    setTimeout(() => {
+      loadWatchlist()
+      loadAllWatchlist()
+    }, 5000)
   } catch (e) {
     message.error('启动采集失败')
   } finally {
@@ -395,6 +460,7 @@ async function collectStock(record: WatchlistItem) {
     message.success(`已开始采集 ${record.stock_name}，请稍候刷新查看`)
     setTimeout(() => {
       loadWatchlist()
+      loadAllWatchlist()
       collectingMap.value[record.stock_code] = false
     }, 8000)
   } catch (e) {
@@ -419,6 +485,7 @@ async function confirmAdd() {
       addForm.value = { code: '', name: '', groupId: 0 }
       loadWatchlist()
       loadGroups()
+      loadAllWatchlist()
     } else {
       message.error(res.message || '添加失败')
     }
@@ -431,88 +498,192 @@ async function confirmAdd() {
 
 onMounted(() => {
   loadGroups()
-  loadWatchlist()
+  loadAllWatchlist()
 })
 </script>
 
 <style scoped>
 .home-page { min-height: calc(100vh - 96px); }
 
-.page-header {
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 分组卡片视图 */
+.view-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 16px;
-  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
 }
+.view-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+.view-subtitle {
+  font-size: 14px;
+  color: #999;
+  margin: 4px 0 0 0;
+}
+.header-actions { display: flex; gap: 12px; }
 
-.group-cards {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  flex: 1;
+.group-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 
 .group-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  padding: 24px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+  border-color: #1d4ed8;
+}
+
+.card-gradient {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 120px;
+  height: 120px;
+  border-radius: 0 0 0 60px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.gradient-all {
+  background: linear-gradient(135deg, #1d4ed822 0%, #1d4ed805 100%);
+}
+
+.card-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 16px;
+}
+
+.card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #1d4ed8;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+}
+.icon-all {
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+}
+
+.card-info { flex: 1; min-width: 0; }
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 2px 0;
+}
+.card-desc {
+  font-size: 12px;
+  color: #999;
+  margin: 0 0 12px 0;
+}
+.card-stats {
+  display: flex;
+  gap: 20px;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-label {
+  font-size: 11px;
+  color: #bbb;
+}
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* 新建分组卡片 */
+.add-card {
+  border-style: dashed;
+  border-color: #d9d9d9;
+  background: #fafafa;
+}
+.add-card:hover {
+  border-color: #1d4ed8;
+  background: #f0f7ff;
+}
+.add-card-inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 90px;
-  height: 64px;
-  background: #fafafa;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  padding: 8px 16px;
+  height: 100%;
+  min-height: 100px;
+  gap: 8px;
+  color: #999;
 }
-.group-card:hover {
-  border-color: #1d4ed8;
-  background: #f0f5ff;
-}
-.group-card.active {
-  border-color: #1d4ed8;
-  background: #e6f4ff;
-}
-.group-card-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
+.add-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f0f0f0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  font-size: 18px;
 }
-.group-card-count {
-  font-size: 12px;
-  color: #999;
-  margin-top: 2px;
-}
-.group-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.add-group-card {
-  border-style: dashed;
-  color: #999;
-}
-.add-group-card:hover {
+.add-card:hover .add-icon {
+  background: #e6f0ff;
   color: #1d4ed8;
 }
+.add-text {
+  font-size: 14px;
+  font-weight: 500;
+}
 
-.header-actions { display: flex; gap: 12px; flex-shrink: 0; }
-
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+/* 列表视图 */
+.list-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin-bottom: 16px;
 }
-.summary-card { background: #fafafa; }
+.back-btn {
+  flex-shrink: 0;
+}
+.list-title-area {
+  flex: 1;
+}
+.list-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+.list-subtitle {
+  font-size: 13px;
+  color: #999;
+  margin: 2px 0 0 0;
+}
 
-.watchlist-card { background: #fff; border-radius: 8px; }
+.watchlist-card { border-radius: 12px; }
 
 .stock-link { display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
 .stock-link:hover .stock-name-text { color: #1d4ed8; }

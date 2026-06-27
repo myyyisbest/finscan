@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股票 F10 分析面板</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+  body { font-family: 'Noto Sans SC', sans-serif; background: #f1f5f9; }
+  .glass { background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); }
+  .card-hover { transition: all 0.3s ease; }
+  .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.12); }
+  .nav-active { color: #2563eb; border-bottom: 2px solid #2563eb; }
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .metric-card { background: linear-gradient(135deg, #fff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; }
+  .dupont-box { position: relative; padding: 16px; border-radius: 12px; text-align: center; color: white; font-weight: 600; }
+  .dupont-connector::after { content: ''; position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); width: 2px; height: 20px; background: #94a3b8; }
+  .dupont-connector-up::before { content: ''; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 2px; height: 20px; background: #94a3b8; }
+  .table-row:hover { background: #f1f5f9; }
+  .badge-up { background: #fee2e2; color: #dc2626; }
+  .badge-down { background: #dcfce7; color: #16a34a; }
+  .badge-flat { background: #f3f4f6; color: #6b7280; }
+  .collect-btn { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+  .collect-btn:hover { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+  .tab-btn { padding: 8px 20px; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+  .tab-btn.active { background: #2563eb; color: white; }
+  .tab-btn:not(.active):hover { background: #e2e8f0; }
+  .compare-bar { background: linear-gradient(90deg, #3b82f6, #8b5cf6); height: 8px; border-radius: 4px; }
+  .toast { position: fixed; top: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; color: white; font-weight: 500; z-index: 9999; animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- 顶部导航 -->
+<nav class="glass sticky top-0 z-50 border-b border-slate-200">
+  <div class="max-w-7xl mx-auto px-4">
+    <div class="flex items-center justify-between h-16">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <span class="text-xl font-bold text-slate-800">F10 智投分析</span>
+      </div>
+      <div class="flex gap-1 bg-slate-100 rounded-xl p-1">
+        <button onclick="switchRoute('watchlist')" id="nav-watchlist" class="tab-btn active flex items-center gap-2">
+          <i class="fas fa-star"></i> 我的自选
+        </button>
+        <button onclick="switchRoute('financial')" id="nav-financial" class="tab-btn flex items-center gap-2">
+          <i class="fas fa-file-invoice-dollar"></i> 财务分析
+        </button>
+        <button onclick="switchRoute('compare')" id="nav-compare" class="tab-btn flex items-center gap-2">
+          <i class="fas fa-balance-scale"></i> 对标分析
+        </button>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-sm text-slate-500"><i class="far fa-clock mr-1"></i><span id="clock"></span></div>
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold">U</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- 主内容区 -->
+<main class="max-w-7xl mx-auto px-4 py-6">
+
+  <!-- ========== 路由1: 我的自选 ========== -->
+  <div id="route-watchlist" class="fade-in">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">我的自选分组</h1>
+        <p class="text-slate-500 text-sm mt-1">管理您的股票分组与持仓跟踪</p>
+      </div>
+      <button onclick="collectData('all')" class="collect-btn text-white px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-blue-200 hover:shadow-xl transition-all">
+        <i class="fas fa-cloud-download-alt"></i> 采集全部数据
+      </button>
+    </div>
+
+    <!-- 分组卡片网格 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="group-cards">
+      <!-- 动态生成 -->
+    </div>
+  </div>
+
+  <!-- ========== 分组详情（自选子页面）========== -->
+  <div id="route-group-detail" class="fade-in hidden">
+    <div class="flex items-center gap-3 mb-6">
+      <button onclick="backToWatchlist()" class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800" id="group-detail-title">分组详情</h1>
+        <p class="text-slate-500 text-sm mt-1" id="group-detail-desc">共 <span id="group-stock-count">0</span> 只股票</p>
+      </div>
+      <div class="ml-auto">
+        <button onclick="collectData('group')" class="collect-btn text-white px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-blue-200">
+          <i class="fas fa-cloud-download-alt"></i> 采集本组数据
+        </button>
+      </div>
+    </div>
+
+    <!-- 筛选与搜索 -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 mb-4 flex items-center gap-4">
+      <div class="relative flex-1 max-w-md">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+        <input type="text" placeholder="搜索股票名称或代码..." id="stock-search" oninput="filterStocks()"
+          class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm">
+      </div>
+      <div class="flex items-center gap-2 text-sm text-slate-600">
+        <span>报告期:</span>
+        <select id="report-period" onchange="filterStocks()" class="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-blue-500">
+          <option value="2024Q3">2024年三季报</option>
+          <option value="2024H1">2024年中报</option>
+          <option value="2024Q1">2024年一季报</option>
+          <option value="2023A">2023年年报</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 股票列表 -->
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
+              <th class="px-4 py-3 text-left">分组</th>
+              <th class="px-4 py-3 text-left">股票名称/代码</th>
+              <th class="px-4 py-3 text-left">报告期</th>
+              <th class="px-4 py-3 text-right cursor-pointer hover:text-blue-600" onclick="sortTable('revenue')">营业总收入 <i class="fas fa-sort text-xs"></i></th>
+              <th class="px-4 py-3 text-right cursor-pointer hover:text-blue-600" onclick="sortTable('profit')">归母净利润 <i class="fas fa-sort text-xs"></i></th>
+              <th class="px-4 py-3 text-right cursor-pointer hover:text-blue-600" onclick="sortTable('roe')">ROE <i class="fas fa-sort text-xs"></i></th>
+              <th class="px-4 py-3 text-right cursor-pointer hover:text-blue-600" onclick="sortTable('debt')">资产负债率 <i class="fas fa-sort text-xs"></i></th>
+              <th class="px-4 py-3 text-right cursor-pointer hover:text-blue-600" onclick="sortTable('revYoY')">营收同比 <i class="fas fa-sort text-xs"></i></th>
+              <th class="px-4 py-3 text-right cursor-pointer hover:text-blue-600" onclick="sortTable('profitYoY')">利润同比 <i class="fas fa-sort text-xs"></i></th>
+              <th class="px-4 py-3 text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody id="stock-list-body">
+            <!-- 动态生成 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 路由2: 财务分析 ========== -->
+  <div id="route-financial" class="fade-in hidden">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">财务分析</h1>
+        <p class="text-slate-500 text-sm mt-1">深度拆解企业财务状况与杜邦分析</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <select id="fin-stock-select" onchange="loadFinancialData()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 bg-white min-w-[200px]">
+          <option value="">选择股票...</option>
+        </select>
+        <select id="fin-period-select" onchange="loadFinancialData()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 bg-white">
+          <option value="2024Q3">2024Q3</option>
+          <option value="2024H1">2024H1</option>
+          <option value="2024Q1">2024Q1</option>
+          <option value="2023A">2023年报</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 主要指标卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="kpi-cards">
+      <!-- 动态生成 -->
+    </div>
+
+    <!-- 杜邦分析 -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-6 shadow-sm">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i class="fas fa-sitemap text-blue-500"></i> 杜邦分析
+        </h2>
+        <span class="text-xs text-slate-400 bg-slate-100 px-3 py-1 rounded-full">ROE = 净利率 × 资产周转率 × 权益乘数</span>
+      </div>
+      <div class="flex flex-col items-center gap-4" id="dupont-tree">
+        <!-- 动态生成杜邦树 -->
+      </div>
+    </div>
+
+    <!-- 三大报表 Tab -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="flex border-b border-slate-200 bg-slate-50">
+        <button onclick="switchFinTab('balance')" id="tab-balance" class="px-6 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600 bg-white">资产负债表</button>
+        <button onclick="switchFinTab('income')" id="tab-income" class="px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700">利润表</button>
+        <button onclick="switchFinTab('cashflow')" id="tab-cashflow" class="px-6 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700">现金流量表</button>
+      </div>
+      <div class="p-6" id="fin-table-container">
+        <!-- 动态生成 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 路由3: 对标分析 ========== -->
+  <div id="route-compare" class="fade-in hidden">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800">对标分析</h1>
+        <p class="text-slate-500 text-sm mt-1">同组公司主要财务指标横向对比</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <select id="compare-group-select" onchange="loadCompareData()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 bg-white min-w-[200px]">
+          <option value="">选择分组...</option>
+        </select>
+        <select id="compare-period" onchange="loadCompareData()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500 bg-white">
+          <option value="2024Q3">2024Q3</option>
+          <option value="2024H1">2024H1</option>
+          <option value="2023A">2023年报</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 对比图表 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-700 mb-3">营收规模对比（亿元）</h3>
+        <div id="chart-revenue" style="height: 300px;"></div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-700 mb-3">ROE 对比（%）</h3>
+        <div id="chart-roe" style="height: 300px;"></div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-700 mb-3">资产负债率对比（%）</h3>
+        <div id="chart-debt" style="height: 300px;"></div>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-700 mb-3">净利润对比（亿元）</h3>
+        <div id="chart-profit" style="height: 300px;"></div>
+      </div>
+    </div>
+
+    <!-- 对比表格 -->
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <h3 class="font-bold text-slate-800">详细指标对比表</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" id="compare-table">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
+              <th class="px-4 py-3 text-left sticky left-0 bg-slate-50">指标</th>
+              <!-- 动态列 -->
+            </tr>
+          </thead>
+          <tbody id="compare-table-body">
+            <!-- 动态生成 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ===================== 数据层 =====================
+const groups = [
+  { id: 'aerospace', name: '商业航天', icon: 'fa-rocket', color: 'from-blue-500 to-cyan-400', count: 8, stocks: [
+    { code: '688523', name: '航天环宇', revenue: 3.82, profit: 0.42, roe: 8.5, debt: 32.1, revYoY: 15.3, profitYoY: 22.1 },
+    { code: '688070', name: '纵横股份', revenue: 2.15, profit: -0.18, roe: -4.2, debt: 45.6, revYoY: 28.7, profitYoY: -35.2 },
+    { code: '300900', name: '广联航空', revenue: 5.67, profit: 0.89, roe: 12.3, debt: 38.4, revYoY: 42.1, profitYoY: 55.3 },
+    { code: '002025', name: '航天电器', revenue: 48.23, profit: 5.12, roe: 14.8, debt: 35.2, revYoY: 12.5, profitYoY: 18.7 },
+    { code: '600879', name: '航天电子', revenue: 128.45, profit: 4.23, roe: 6.2, debt: 52.1, revYoY: 8.3, profitYoY: 5.1 },
+    { code: '688296', name: '和辉光电', revenue: 32.18, profit: -8.92, roe: -12.5, debt: 68.3, revYoY: -5.2, profitYoY: -22.1 },
+    { code: '300101', name: '振芯科技', revenue: 6.78, profit: 1.85, roe: 15.6, debt: 18.4, revYoY: 25.3, profitYoY: 32.4 },
+    { code: '688523', name: '航天宏图', revenue: 15.23, profit: -2.15, roe: -8.3, debt: 42.7, revYoY: -12.5, profitYoY: -45.2 }
+  ]},
+  { id: 'consumer', name: '消费电子', icon: 'fa-mobile-alt', color: 'from-purple-500 to-pink-400', count: 6, stocks: [
+    { code: '002475', name: '立讯精密', revenue: 1771.36, profit: 82.56, roe: 21.5, debt: 58.3, revYoY: 13.7, profitYoY: 23.1 },
+    { code: '300433', name: '蓝思科技', revenue: 462.35, profit: 18.23, roe: 8.2, debt: 42.1, revYoY: 25.3, profitYoY: 42.5 },
+    { code: '002241', name: '歌尔股份', revenue: 587.23, profit: 8.92, roe: 6.8, debt: 48.5, revYoY: -8.2, profitYoY: -35.6 },
+    { code: '000725', name: '京东方A', revenue: 1437.32, profit: 33.45, roe: 5.2, debt: 52.8, revYoY: 12.5, profitYoY: 225.3 },
+    { code: '688036', name: '传音控股', revenue: 512.56, profit: 38.92, roe: 28.5, debt: 48.2, revYoY: 18.3, profitYoY: 32.1 },
+    { code: '002273', name: '水晶光电', revenue: 42.15, profit: 5.23, roe: 12.8, debt: 18.5, revYoY: 32.1, profitYoY: 42.3 }
+  ]},
+  { id: 'food', name: '食品制造', icon: 'fa-utensils', color: 'from-orange-400 to-red-400', count: 5, stocks: [
+    { code: '600887', name: '伊利股份', revenue: 890.23, profit: 85.12, roe: 22.5, debt: 52.3, revYoY: -5.2, profitYoY: 12.3 },
+    { code: '000895', name: '双汇发展', revenue: 462.15, profit: 42.35, roe: 25.8, debt: 38.2, revYoY: -8.5, profitYoY: -15.2 },
+    { code: '603288', name: '海天味业', revenue: 203.56, profit: 48.23, roe: 18.5, debt: 22.1, revYoY: 8.3, profitYoY: 12.5 },
+    { code: '002507', name: '涪陵榨菜', revenue: 22.35, profit: 7.82, roe: 12.3, debt: 8.5, revYoY: -2.1, profitYoY: -8.3 },
+    { code: '600298', name: '安琪酵母', revenue: 102.35, profit: 9.82, roe: 15.2, debt: 42.5, revYoY: 12.5, profitYoY: 5.2 }
+  ]},
+  { id: 'newenergy', name: '新能源', icon: 'fa-bolt', color: 'from-green-500 to-emerald-400', count: 7, stocks: [
+    { code: '300750', name: '宁德时代', revenue: 2590.45, profit: 360.12, roe: 22.8, debt: 68.5, revYoY: -12.5, profitYoY: 15.3 },
+    { code: '002594', name: '比亚迪', revenue: 5023.12, profit: 252.35, roe: 18.5, debt: 72.3, revYoY: 18.5, profitYoY: 32.1 },
+    { code: '601012', name: '隆基绿能', revenue: 585.23, profit: -52.35, roe: -8.2, debt: 62.5, revYoY: -35.2, profitYoY: -155.3 },
+    { code: '688599', name: '天合光能', revenue: 782.35, profit: 32.15, roe: 12.5, debt: 72.8, revYoY: -8.2, profitYoY: -42.5 },
+    { code: '002129', name: 'TCL中环', revenue: 285.23, profit: -32.15, roe: -6.5, debt: 58.2, revYoY: -52.3, profitYoY: -185.2 },
+    { code: '300274', name: '阳光电源', revenue: 462.35, profit: 52.35, roe: 28.5, debt: 62.5, revYoY: 12.5, profitYoY: 32.1 },
+    { code: '688223', name: '晶科能源', revenue: 718.25, profit: 12.35, roe: 4.2, debt: 75.2, revYoY: -15.2, profitYoY: -82.5 }
+  ]},
+  { id: 'ai', name: '人工智能', icon: 'fa-brain', color: 'from-indigo-500 to-violet-400', count: 4, stocks: [
+    { code: '688256', name: '寒武纪', revenue: 1.85, profit: -8.25, roe: -15.2, debt: 12.5, revYoY: 42.5, profitYoY: -15.2 },
+    { code: '002230', name: '科大讯飞', revenue: 148.25, profit: -3.25, roe: -2.5, debt: 48.2, revYoY: 18.5, profitYoY: -225.3 },
+    { code: '688981', name: '中芯国际', revenue: 418.25, profit: 32.15, roe: 4.2, debt: 35.2, revYoY: 15.2, profitYoY: 12.5 },
+    { code: '603019', name: '中科曙光', revenue: 102.35, profit: 10.25, roe: 8.5, debt: 38.5, revYoY: 12.5, profitYoY: 15.2 }
+  ]}
+];
+
+const financialData = {
+  '002475': {
+    name: '立讯精密', period: '2024Q3',
+    kpi: { revenue: 1771.36, profit: 82.56, roe: 21.5, debt: 58.3, gross: 12.8, net: 4.7 },
+    dupont: { roe: 21.5, npm: 4.7, turnover: 1.85, equity: 2.47 },
+    balance: [
+      ['流动资产', '1023.56', '非流动资产', '1452.35'],
+      ['货币资金', '285.23', '固定资产', '652.35'],
+      ['应收账款', '425.12', '无形资产', '125.35'],
+      ['存货', '312.35', '长期股权投资', '85.23'],
+      ['流动负债', '892.35', '非流动负债', '325.12'],
+      ['短期借款', '285.23', '长期借款', '185.35'],
+      ['应付账款', '452.35', '应付债券', '125.35'],
+      ['所有者权益', '1258.23', '负债合计', '1217.47']
+    ],
+    income: [
+      ['营业收入', '1771.36', '营业成本', '1544.56'],
+      ['销售费用', '12.35', '管理费用', '45.23'],
+      ['研发费用', '85.23', '财务费用', '15.23'],
+      ['营业利润', '98.56', '利润总额', '98.23'],
+      ['所得税', '12.35', '净利润', '85.88'],
+      ['归母净利润', '82.56', '少数股东损益', '3.32']
+    ],
+    cashflow: [
+      ['经营活动现金流入', '1852.35', '经营活动现金流出', '1685.23'],
+      ['经营活动净现金流', '167.12', '投资活动净现金流', '-125.35'],
+      ['筹资活动净现金流', '-85.23', '汇率变动影响', '2.35'],
+      ['现金净增加额', '-41.11', '期末现金余额', '285.23']
+    ]
+  }
+};
+
+let currentGroup = null;
+let currentSort = { field: null, asc: true };
+
+// ===================== 初始化 =====================
+document.addEventListener('DOMContentLoaded', () => {
+  renderGroupCards();
+  updateClock();
+  setInterval(updateClock, 1000);
+  populateStockSelect();
+  populateGroupSelect();
+});
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleString('zh-CN', { hour12: false });
+}
+
+// ===================== 路由切换 =====================
+function switchRoute(route) {
+  ['watchlist', 'financial', 'compare'].forEach(r => {
+    document.getElementById('route-' + r).classList.add('hidden');
+    document.getElementById('nav-' + r).classList.remove('active');
+  });
+  document.getElementById('route-' + route).classList.remove('hidden');
+  document.getElementById('nav-' + route).classList.add('active');
+  document.getElementById('route-group-detail').classList.add('hidden');
+
+  if (route === 'compare') {
+    setTimeout(() => loadCompareData(), 100);
+  }
+}
+
+// ===================== 自选分组卡片 =====================
+function renderGroupCards() {
+  const container = document.getElementById('group-cards');
+  container.innerHTML = groups.map(g => `
+    <div onclick="openGroupDetail('${g.id}')" class="card-hover bg-white rounded-2xl border border-slate-200 p-6 cursor-pointer shadow-sm relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${g.color} opacity-10 rounded-bl-full"></div>
+      <div class="flex items-start justify-between mb-4">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br ${g.color} flex items-center justify-center text-white text-2xl shadow-lg">
+          <i class="fas ${g.icon}"></i>
+        </div>
+        <span class="text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">${g.count} 只</span>
+      </div>
+      <h3 class="text-xl font-bold text-slate-800 mb-1">${g.name}</h3>
+      <p class="text-sm text-slate-500 mb-4">点击查看分组详情与财务数据</p>
+      <div class="flex items-center gap-4 text-sm">
+        <div>
+          <div class="text-slate-400 text-xs">平均ROE</div>
+          <div class="font-bold text-slate-700">${(g.stocks.reduce((a,s)=>a+s.roe,0)/g.stocks.length).toFixed(1)}%</div>
+        </div>
+        <div class="w-px h-8 bg-slate-200"></div>
+        <div>
+          <div class="text-slate-400 text-xs">平均负债率</div>
+          <div class="font-bold text-slate-700">${(g.stocks.reduce((a,s)=>a+s.debt,0)/g.stocks.length).toFixed(1)}%</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ===================== 分组详情 =====================
+function openGroupDetail(groupId) {
+  currentGroup = groups.find(g => g.id === groupId);
+  document.getElementById('route-watchlist').classList.add('hidden');
+  document.getElementById('route-group-detail').classList.remove('hidden');
+  document.getElementById('group-detail-title').textContent = currentGroup.name;
+  document.getElementById('group-stock-count').textContent = currentGroup.stocks.length;
+  renderStockList(currentGroup.stocks);
+}
+
+function backToWatchlist() {
+  document.getElementById('route-group-detail').classList.add('hidden');
+  document.getElementById('route-watchlist').classList.remove('hidden');
+  currentGroup = null;
+}
+
+function renderStockList(stocks) {
+  const tbody = document.getElementById('stock-list-body');
+  const search = document.getElementById('stock-search').value.toLowerCase();
+  const filtered = stocks.filter(s => 
+    s.name.toLowerCase().includes(search) || s.code.includes(search)
+  );
+
+  // 排序
+  if (currentSort.field) {
+    filtered.sort((a, b) => {
+      const va = a[currentSort.field], vb = b[currentSort.field];
+      return currentSort.asc ? va - vb : vb - va;
+    });
+  }
+
+  tbody.innerHTML = filtered.map(s => {
+    const revBadge = s.revYoY > 0 ? 'badge-up' : s.revYoY < 0 ? 'badge-down' : 'badge-flat';
+    const profBadge = s.profitYoY > 0 ? 'badge-up' : s.profitYoY < 0 ? 'badge-down' : 'badge-flat';
+    const revIcon = s.revYoY > 0 ? 'fa-arrow-up' : s.revYoY < 0 ? 'fa-arrow-down' : 'fa-minus';
+    const profIcon = s.profitYoY > 0 ? 'fa-arrow-up' : s.profitYoY < 0 ? 'fa-arrow-down' : 'fa-minus';
+
+    return `
+      <tr class="table-row border-b border-slate-100 transition-colors">
+        <td class="px-4 py-3">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+            ${currentGroup.name}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <div class="font-semibold text-slate-800">${s.name}</div>
+          <div class="text-xs text-slate-400">${s.code}</div>
+        </td>
+        <td class="px-4 py-3 text-slate-500">2024Q3</td>
+        <td class="px-4 py-3 text-right font-medium">${s.revenue.toFixed(2)}</td>
+        <td class="px-4 py-3 text-right font-medium ${s.profit < 0 ? 'text-red-500' : ''}">${s.profit.toFixed(2)}</td>
+        <td class="px-4 py-3 text-right font-medium">${s.roe.toFixed(1)}%</td>
+        <td class="px-4 py-3 text-right font-medium">${s.debt.toFixed(1)}%</td>
+        <td class="px-4 py-3 text-right">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${revBadge}">
+            <i class="fas ${revIcon} text-xs"></i> ${Math.abs(s.revYoY).toFixed(1)}%
+          </span>
+        </td>
+        <td class="px-4 py-3 text-right">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${profBadge}">
+            <i class="fas ${profIcon} text-xs"></i> ${Math.abs(s.profitYoY).toFixed(1)}%
+          </span>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <button onclick="viewFinancial('${s.code}')" class="text-blue-500 hover:text-blue-700 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+            <i class="fas fa-chart-bar mr-1"></i>财务
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filterStocks() { renderStockList(currentGroup.stocks); }
+
+function sortTable(field) {
+  if (currentSort.field === field) {
+    currentSort.asc = !currentSort.asc;
+  } else {
+    currentSort.field = field;
+    currentSort.asc = true;
+  }
+  renderStockList(currentGroup.stocks);
+}
+
+function viewFinancial(code) {
+  document.getElementById('fin-stock-select').value = code;
+  switchRoute('financial');
+  loadFinancialData();
+}
+
+// ===================== 采集数据 =====================
+function collectData(scope) {
+  const msg = scope === 'all' ? '正在采集全部分组数据...' : `正在采集「${currentGroup.name}」数据...`;
+  showToast(msg, 'info');
+  setTimeout(() => showToast('数据采集完成！', 'success'), 1500);
+}
+
+function showToast(message, type) {
+  const colors = { success: 'bg-green-500', info: 'bg-blue-500', error: 'bg-red-500' };
+  const toast = document.createElement('div');
+  toast.className = `toast ${colors[type] || colors.info}`;
+  toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check' : 'fa-info-circle'} mr-2"></i>${message}`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// ===================== 财务分析 =====================
+function populateStockSelect() {
+  const select = document.getElementById('fin-stock-select');
+  groups.forEach(g => {
+    g.stocks.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.code;
+      opt.textContent = `${s.name} (${s.code})`;
+      select.appendChild(opt);
+    });
+  });
+  select.value = '002475';
+  loadFinancialData();
+}
+
+function loadFinancialData() {
+  const code = document.getElementById('fin-stock-select').value;
+  const period = document.getElementById('fin-period-select').value;
+  if (!code) return;
+
+  // 使用模拟数据或生成随机数据
+  const data = financialData[code] || generateMockFinancial(code, period);
+
+  // KPI 卡片
+  const kpiContainer = document.getElementById('kpi-cards');
+  const kpi = data.kpi;
+  kpiContainer.innerHTML = [
+    { label: '营业总收入', value: kpi.revenue + '亿', icon: 'fa-coins', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: '归母净利润', value: kpi.profit + '亿', icon: 'fa-hand-holding-usd', color: 'text-green-600', bg: 'bg-green-50' },
+    { label: '净资产收益率', value: kpi.roe + '%', icon: 'fa-percentage', color: 'text-purple-600', bg: 'bg-purple-50' },
+    { label: '资产负债率', value: kpi.debt + '%', icon: 'fa-balance-scale', color: 'text-orange-600', bg: 'bg-orange-50' }
+  ].map(k => `
+    <div class="metric-card rounded-2xl p-5 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm text-slate-500">${k.label}</span>
+        <div class="w-10 h-10 rounded-xl ${k.bg} flex items-center justify-center ${k.color}">
+          <i class="fas ${k.icon}"></i>
+        </div>
+      </div>
+      <div class="text-2xl font-bold text-slate-800">${k.value}</div>
+      <div class="text-xs text-slate-400 mt-1">${period}</div>
+    </div>
+  `).join('');
+
+  // 杜邦分析树
+  const d = data.dupont;
+  const dupontTree = document.getElementById('dupont-tree');
+  dupontTree.innerHTML = `
+    <div class="dupont-box bg-gradient-to-r from-blue-500 to-indigo-600 w-48 dupont-connector" style="z-index:3">
+      <div class="text-xs opacity-80">净资产收益率 ROE</div>
+      <div class="text-2xl">${d.roe}%</div>
+    </div>
+    <div class="flex gap-8 mt-4">
+      <div class="flex flex-col items-center">
+        <div class="dupont-box bg-gradient-to-r from-cyan-500 to-blue-500 w-36 dupont-connector-up dupont-connector" style="z-index:2">
+          <div class="text-xs opacity-80">销售净利率</div>
+          <div class="text-xl">${d.npm}%</div>
+        </div>
+      </div>
+      <div class="flex flex-col items-center">
+        <div class="dupont-box bg-gradient-to-r from-emerald-500 to-teal-500 w-36 dupont-connector-up dupont-connector" style="z-index:2">
+          <div class="text-xs opacity-80">总资产周转率</div>
+          <div class="text-xl">${d.turnover}</div>
+        </div>
+      </div>
+      <div class="flex flex-col items-center">
+        <div class="dupont-box bg-gradient-to-r from-violet-500 to-purple-500 w-36 dupont-connector-up" style="z-index:2">
+          <div class="text-xs opacity-80">权益乘数</div>
+          <div class="text-xl">${d.equity}</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 text-xs text-slate-400 bg-slate-50 px-4 py-2 rounded-lg">
+      <i class="fas fa-info-circle mr-1"></i> 
+      杜邦分析：ROE(${d.roe}%) = 净利率(${d.npm}%) × 资产周转率(${d.turnover}) × 权益乘数(${d.equity})
+    </div>
+  `;
+
+  // 默认显示资产负债表
+  switchFinTab('balance');
+}
+
+function generateMockFinancial(code, period) {
+  const stock = groups.flatMap(g => g.stocks).find(s => s.code === code);
+  const base = stock || { name: '未知', revenue: 100, profit: 10, roe: 10, debt: 40 };
+  return {
+    name: base.name, period,
+    kpi: { revenue: base.revenue, profit: base.profit, roe: base.roe, debt: base.debt, gross: 25, net: base.profit/base.revenue*100 },
+    dupont: { roe: base.roe, npm: (base.profit/base.revenue*100).toFixed(1), turnover: 1.2, equity: (base.roe/(base.profit/base.revenue*100)/1.2).toFixed(2) },
+    balance: [
+      ['流动资产', (base.revenue*0.6).toFixed(2), '非流动资产', (base.revenue*0.8).toFixed(2)],
+      ['货币资金', (base.revenue*0.15).toFixed(2), '固定资产', (base.revenue*0.4).toFixed(2)],
+      ['应收账款', (base.revenue*0.25).toFixed(2), '无形资产', (base.revenue*0.1).toFixed(2)],
+      ['存货', (base.revenue*0.2).toFixed(2), '长期股权投资', (base.revenue*0.08).toFixed(2)],
+      ['流动负债', (base.revenue*0.4).toFixed(2), '非流动负债', (base.revenue*0.2).toFixed(2)],
+      ['短期借款', (base.revenue*0.15).toFixed(2), '长期借款', (base.revenue*0.12).toFixed(2)],
+      ['应付账款', (base.revenue*0.2).toFixed(2), '应付债券', (base.revenue*0.05).toFixed(2)],
+      ['所有者权益', (base.revenue*0.8).toFixed(2), '负债合计', (base.revenue*0.6).toFixed(2)]
+    ],
+    income: [
+      ['营业收入', base.revenue.toFixed(2), '营业成本', (base.revenue*0.75).toFixed(2)],
+      ['销售费用', (base.revenue*0.02).toFixed(2), '管理费用', (base.revenue*0.04).toFixed(2)],
+      ['研发费用', (base.revenue*0.05).toFixed(2), '财务费用', (base.revenue*0.01).toFixed(2)],
+      ['营业利润', (base.profit*1.2).toFixed(2), '利润总额', (base.profit*1.18).toFixed(2)],
+      ['所得税', (base.profit*0.18).toFixed(2), '净利润', (base.profit*1.0).toFixed(2)],
+      ['归母净利润', base.profit.toFixed(2), '少数股东损益', (base.profit*0.05).toFixed(2)]
+    ],
+    cashflow: [
+      ['经营活动现金流入', (base.revenue*1.1).toFixed(2), '经营活动现金流出', (base.revenue*0.95).toFixed(2)],
+      ['经营活动净现金流', (base.revenue*0.15).toFixed(2), '投资活动净现金流', (-base.revenue*0.08).toFixed(2)],
+      ['筹资活动净现金流', (-base.revenue*0.05).toFixed(2), '汇率变动影响', '0.25'],
+      ['现金净增加额', (base.revenue*0.02).toFixed(2), '期末现金余额', (base.revenue*0.15).toFixed(2)]
+    ]
+  };
+}
+
+let currentFinTab = 'balance';
+function switchFinTab(tab) {
+  currentFinTab = tab;
+  ['balance', 'income', 'cashflow'].forEach(t => {
+    const btn = document.getElementById('tab-' + t);
+    if (t === tab) {
+      btn.classList.add('border-blue-500', 'text-blue-600', 'bg-white');
+      btn.classList.remove('border-transparent', 'text-slate-500');
+    } else {
+      btn.classList.remove('border-blue-500', 'text-blue-600', 'bg-white');
+      btn.classList.add('border-transparent', 'text-slate-500');
+    }
+  });
+
+  const code = document.getElementById('fin-stock-select').value;
+  if (!code) return;
+  const data = financialData[code] || generateMockFinancial(code, document.getElementById('fin-period-select').value);
+  const tableData = data[tab];
+
+  const headers = tab === 'balance' ? ['资产项目', '金额(亿)', '负债及权益项目', '金额(亿)'] :
+                  tab === 'income' ? ['项目', '金额(亿)', '项目', '金额(亿)'] :
+                  ['项目', '金额(亿)', '项目', '金额(亿)'];
+
+  let html = `<table class="w-full text-sm"><thead><tr class="bg-slate-50 text-slate-600 font-medium">`;
+  headers.forEach(h => html += `<th class="px-4 py-3 text-left">${h}</th>`);
+  html += `</tr></thead><tbody>`;
+
+  tableData.forEach((row, i) => {
+    const bg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+    html += `<tr class="${bg} border-b border-slate-100">`;
+    row.forEach((cell, ci) => {
+      const align = ci % 2 === 1 ? 'text-right' : 'text-left';
+      const bold = ci % 2 === 0 ? 'font-medium text-slate-700' : 'text-slate-600';
+      html += `<td class="px-4 py-3 ${align} ${bold}">${cell}</td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  document.getElementById('fin-table-container').innerHTML = html;
+}
+
+// ===================== 对标分析 =====================
+function populateGroupSelect() {
+  const select = document.getElementById('compare-group-select');
+  groups.forEach(g => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    select.appendChild(opt);
+  });
+  select.value = 'aerospace';
+}
+
+let compareCharts = {};
+
+function loadCompareData() {
+  const groupId = document.getElementById('compare-group-select').value;
+  const period = document.getElementById('compare-period').value;
+  if (!groupId) return;
+
+  const group = groups.find(g => g.id === groupId);
+  const stocks = group.stocks;
+  const names = stocks.map(s => s.name);
+
+  // 营收对比
+  initChart('chart-revenue', {
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: names, axisLabel: { rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', name: '亿元' },
+    series: [{
+      type: 'bar',
+      data: stocks.map(s => ({ value: s.revenue, itemStyle: { color: s.revenue > 0 ? '#3b82f6' : '#ef4444' } })),
+      barWidth: '50%',
+      label: { show: true, position: 'top', fontSize: 10 }
+    }]
+  });
+
+  // ROE 对比
+  initChart('chart-roe', {
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: names, axisLabel: { rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', name: '%' },
+    series: [{
+      type: 'bar',
+      data: stocks.map(s => ({ 
+        value: s.roe, 
+        itemStyle: { color: s.roe > 15 ? '#10b981' : s.roe > 0 ? '#3b82f6' : '#ef4444' }
+      })),
+      barWidth: '50%',
+      label: { show: true, position: 'top', fontSize: 10, formatter: '{c}%' }
+    }]
+  });
+
+  // 资产负债率对比
+  initChart('chart-debt', {
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: names, axisLabel: { rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', name: '%', max: 100 },
+    series: [{
+      type: 'bar',
+      data: stocks.map(s => ({ 
+        value: s.debt, 
+        itemStyle: { color: s.debt > 60 ? '#f59e0b' : s.debt > 40 ? '#3b82f6' : '#10b981' }
+      })),
+      barWidth: '50%',
+      label: { show: true, position: 'top', fontSize: 10, formatter: '{c}%' }
+    }]
+  });
+
+  // 净利润对比
+  initChart('chart-profit', {
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: names, axisLabel: { rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', name: '亿元' },
+    series: [{
+      type: 'bar',
+      data: stocks.map(s => ({ 
+        value: s.profit, 
+        itemStyle: { color: s.profit > 0 ? '#8b5cf6' : '#ef4444' }
+      })),
+      barWidth: '50%',
+      label: { show: true, position: 'top', fontSize: 10 }
+    }]
+  });
+
+  // 详细对比表
+  const thead = document.querySelector('#compare-table thead tr');
+  thead.innerHTML = '<th class="px-4 py-3 text-left sticky left-0 bg-slate-50">指标</th>' + 
+    stocks.map(s => `<th class="px-4 py-3 text-center">${s.name}</th>`).join('');
+
+  const tbody = document.getElementById('compare-table-body');
+  const metrics = [
+    { key: 'revenue', label: '营业总收入(亿)' },
+    { key: 'profit', label: '归母净利润(亿)' },
+    { key: 'roe', label: 'ROE(%)', fmt: v => v.toFixed(1) },
+    { key: 'debt', label: '资产负债率(%)', fmt: v => v.toFixed(1) },
+    { key: 'revYoY', label: '营收同比(%)', fmt: v => v.toFixed(1) },
+    { key: 'profitYoY', label: '利润同比(%)', fmt: v => v.toFixed(1) }
+  ];
+
+  tbody.innerHTML = metrics.map((m, i) => {
+    const bg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+    return `<tr class="${bg} border-b border-slate-100">
+      <td class="px-4 py-3 font-medium text-slate-700 sticky left-0 ${bg}">${m.label}</td>
+      ${stocks.map(s => {
+        const val = m.fmt ? m.fmt(s[m.key]) : s[m.key].toFixed(2);
+        let color = 'text-slate-600';
+        if (m.key === 'roe' && s[m.key] > 15) color = 'text-green-600 font-bold';
+        if (m.key === 'debt' && s[m.key] > 60) color = 'text-orange-600 font-bold';
+        if (m.key === 'profitYoY' && s[m.key] < 0) color = 'text-red-500';
+        if (m.key === 'profitYoY' && s[m.key] > 0) color = 'text-green-600';
+        return `<td class="px-4 py-3 text-center ${color}">${val}</td>`;
+      }).join('')}
+    </tr>`;
+  }).join('');
+}
+
+function initChart(id, option) {
+  if (compareCharts[id]) compareCharts[id].dispose();
+  const chart = echarts.init(document.getElementById(id));
+  chart.setOption(option);
+  compareCharts[id] = chart;
+}
+
+window.addEventListener('resize', () => {
+  Object.values(compareCharts).forEach(c => c.resize());
+});
+</script>
+
+</body>
+</html>
