@@ -127,9 +127,9 @@ const pagination = ref({
 })
 
 const columns = [
-  { title: '股票', key: 'stock_name', width: 120, fixed: 'left' as const },
-  { title: '公告标题', key: 'title', ellipsis: true },
-  { title: '公告类型', key: 'ann_type', width: 120 },
+  { title: '股票', dataIndex: 'stock_name', key: 'stock_name', width: 120, fixed: 'left' as const },
+  { title: '公告标题', dataIndex: 'title', key: 'title', ellipsis: true },
+  { title: '公告类型', dataIndex: 'ann_type', key: 'ann_type', width: 130 },
   { title: '披露日期', dataIndex: 'disclosure_date', key: 'disclosure_date', width: 120 },
 ]
 
