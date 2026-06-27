@@ -24,10 +24,9 @@
               <div class="item-content">
                 <a
                   class="announce-title"
-                  :href="item.url"
+                  :href="getUrl(item.url)"
                   target="_blank"
                   rel="noopener noreferrer"
-                  @click.stop
                 >
                   {{ item.title }}
                 </a>
@@ -76,9 +75,15 @@ const loading = ref(false)
 const announcements = ref<Announcement[]>([])
 const errorMsg = ref('')
 
+function getUrl(url: string): string {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return 'https://' + url
+}
+
 function openUrl(url: string) {
   if (url) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    window.open(getUrl(url), '_blank', 'noopener,noreferrer')
   }
 }
 

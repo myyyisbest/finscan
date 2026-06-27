@@ -69,6 +69,21 @@
               </div>
             </div>
           </div>
+          <div class="card-actions" @click.stop>
+            <a-button type="text" size="small" @click="showRenameGroup(g)">
+              <EditOutlined />
+            </a-button>
+            <a-popconfirm
+              title="确定删除该分组？组内股票将移至默认分组"
+              ok-text="确定"
+              cancel-text="取消"
+              @confirm="deleteGroup(g.id)"
+            >
+              <a-button type="text" danger size="small">
+                <DeleteOutlined />
+              </a-button>
+            </a-popconfirm>
+          </div>
         </div>
 
         <!-- 新建分组卡片 -->
@@ -107,17 +122,26 @@
         <a-spin :spinning="loading">
           <a-table
             :columns="columns"
-            :data-source="watchlist"
+            :data-source="sortedWatchlist"
             :pagination="{ pageSize: 20 }"
             row-key="stock_code"
-            :scroll="{ x: 1100 }"
+            :scroll="{ x: 1200 }"
             size="middle"
+            @change="handleTableChange"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'group_name'">
-                <span class="group-tag" :style="{ background: getGroupColor(record.group_id || 0) }">
-                  {{ record.group_name }}
-                </span>
+                <a-select
+                  v-model:value="record.group_id"
+                  size="small"
+                  style="width: 100px"
+                  @change="moveStockGroup(record)"
+                >
+                  <a-select-option :value="0">默认分组</a-select-option>
+                  <a-select-option v-for="g in groups" :key="g.id" :value="g.id">
+                    {{ g.name }}
+                  </a-select-option>
+                </a-select>
               </template>
               <template v-else-if="column.key === 'stock_name'">
                 <a @click="goToStock(record.stock_code)" class="stock-link">
@@ -243,6 +267,19 @@
       <a-input v-model:value="newGroupName" placeholder="请输入分组名称" size="large" />
     </a-modal>
 
+    <!-- 重命名分组弹窗 -->
+    <a-modal
+      v-model:open="showRenameGroupModal"
+      title="重命名分组"
+      @ok="confirmRenameGroup"
+      :confirm-loading="renameGroupLoading"
+      okText="确定"
+      cancelText="取消"
+      :width="400"
+    >
+      <a-input v-model:value="renameGroupName" placeholder="请输入分组名称" size="large" />
+    </a-modal>
+
     <div class="fab-btn" @click="addModalVisible = true" title="添加自选股">
       <PlusOutlined style="font-size: 24px; color: #fff" />
     </div>
@@ -255,7 +292,8 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   PlusOutlined, CloudDownloadOutlined, ArrowLeftOutlined,
-  AppstoreOutlined, FolderOutlined, LineChartOutlined
+  AppstoreOutlined, FolderOutlined, LineChartOutlined,
+  EditOutlined, DeleteOutlined
 } from '@ant-design/icons-vue'
 import { watchlistApi, stockApi, collectorApi, type WatchlistItem, type SearchResult } from '@/api/finance'
 
@@ -289,6 +327,15 @@ const addModalVisible = ref(false)
 const addForm = ref({ code: '', name: '', groupId: 0 })
 const addLoading = ref(false)
 
+// 排序状态
+const sorter = ref<{ field: string | null; order: string | null }>({ field: null, order: null })
+
+// 重命名分组
+const showRenameGroupModal = ref(false)
+const renameGroupId = ref<number | null>(null)
+const renameGroupName = ref('')
+const renameGroupLoading = ref(false)
+
 // 总股票数
 const totalCount = computed(() => allWatchlist.value.length)
 
@@ -308,17 +355,60 @@ const currentGroupTitle = computed(() => {
   return g?.name || '分组'
 })
 
+// 排序后的列表
+const sortedWatchlist = computed(() => {
+  const list = [...watchlist.value]
+  if (!sorter.value.field || !sorter.value.order) return list
+
+  const field = sorter.value.field
+  const order = sorter.value.order
+
+  const getVal = (item: WatchlistItem): any => {
+    switch (field) {
+      case 'stock_name': return item.stock_name || ''
+      case 'latest_report': return item.latest_report?.report_date || ''
+      case 'total_revenue': return item.latest_report?.total_revenue ?? -Infinity
+      case 'net_profit_parent': return item.latest_report?.net_profit_parent ?? -Infinity
+      case 'roe': return item.latest_report?.roe ?? -Infinity
+      case 'debt_ratio': return item.latest_report?.debt_ratio ?? -Infinity
+      case 'revenue_yoy': return item.latest_report?.revenue_yoy ?? -Infinity
+      case 'net_profit_yoy': return item.latest_report?.net_profit_yoy ?? -Infinity
+      default: return ''
+    }
+  }
+
+  list.sort((a, b) => {
+    const va = getVal(a)
+    const vb = getVal(b)
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return order === 'ascend' ? va - vb : vb - va
+    }
+    return order === 'ascend'
+      ? String(va).localeCompare(String(vb))
+      : String(vb).localeCompare(String(va))
+  })
+  return list
+})
+
+function handleTableChange(_pag: any, _filters: any, sorterInfo: any) {
+  if (sorterInfo && sorterInfo.field) {
+    sorter.value = { field: sorterInfo.key, order: sorterInfo.order }
+  } else {
+    sorter.value = { field: null, order: null }
+  }
+}
+
 // 列表列定义
 const columns = [
-  { title: '分组', key: 'group_name', width: 80 },
-  { title: '股票', key: 'stock_name', width: 130, fixed: 'left' as const },
-  { title: '最新年报期', key: 'latest_report', width: 100 },
-  { title: '营业总收入', key: 'total_revenue', width: 110, align: 'right' as const },
-  { title: '归母净利润', key: 'net_profit_parent', width: 110, align: 'right' as const },
-  { title: 'ROE', key: 'roe', width: 70, align: 'right' as const },
-  { title: '资产负债率', key: 'debt_ratio', width: 90, align: 'right' as const },
-  { title: '营收同比', key: 'revenue_yoy', width: 80, align: 'right' as const },
-  { title: '利润同比', key: 'net_profit_yoy', width: 80, align: 'right' as const },
+  { title: '分组', key: 'group_name', width: 120 },
+  { title: '股票', key: 'stock_name', width: 130, fixed: 'left' as const, sorter: true },
+  { title: '最新年报期', key: 'latest_report', width: 100, sorter: true },
+  { title: '营业总收入', key: 'total_revenue', width: 110, align: 'right' as const, sorter: true },
+  { title: '归母净利润', key: 'net_profit_parent', width: 110, align: 'right' as const, sorter: true },
+  { title: 'ROE', key: 'roe', width: 70, align: 'right' as const, sorter: true },
+  { title: '资产负债率', key: 'debt_ratio', width: 90, align: 'right' as const, sorter: true },
+  { title: '营收同比', key: 'revenue_yoy', width: 80, align: 'right' as const, sorter: true },
+  { title: '利润同比', key: 'net_profit_yoy', width: 80, align: 'right' as const, sorter: true },
   { title: '财报分析', key: 'fin_analysis', width: 90, align: 'center' as const },
   { title: '操作', key: 'action', width: 80, align: 'center' as const, fixed: 'right' as const },
 ]
@@ -332,6 +422,12 @@ function getGroupCollectedCount(groupId: number): number {
 function openGroupDetail(groupId: string) {
   currentGroupId.value = groupId
   viewMode.value = 'list'
+  // 设置添加股票的默认分组
+  if (groupId === 'all') {
+    addForm.value.groupId = 0
+  } else {
+    addForm.value.groupId = parseInt(groupId)
+  }
   loadWatchlist(groupId)
 }
 
@@ -433,6 +529,61 @@ async function removeStock(record: WatchlistItem) {
     loadAllWatchlist()
   } catch (e) {
     message.error('移除失败')
+  }
+}
+
+async function moveStockGroup(record: WatchlistItem) {
+  try {
+    await watchlistApi.moveStock(record.stock_code, record.group_id || 0)
+    message.success('分组已更新')
+    record.group_name = record.group_id === 0
+      ? '默认分组'
+      : groups.value.find(g => g.id === record.group_id)?.name || '默认分组'
+    loadGroups()
+    loadAllWatchlist()
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '移动失败')
+    loadWatchlist()
+  }
+}
+
+function showRenameGroup(g: Group) {
+  renameGroupId.value = g.id
+  renameGroupName.value = g.name
+  showRenameGroupModal.value = true
+}
+
+async function confirmRenameGroup() {
+  if (!renameGroupName.value.trim() || renameGroupId.value == null) {
+    message.warning('请输入分组名称')
+    return
+  }
+  renameGroupLoading.value = true
+  try {
+    await watchlistApi.renameGroup(renameGroupId.value, renameGroupName.value.trim())
+    message.success('分组已更新')
+    showRenameGroupModal.value = false
+    renameGroupId.value = null
+    renameGroupName.value = ''
+    await loadGroups()
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '重命名失败')
+  } finally {
+    renameGroupLoading.value = false
+  }
+}
+
+async function deleteGroup(id: number) {
+  try {
+    await watchlistApi.deleteGroup(id)
+    message.success('分组已删除')
+    await loadGroups()
+    await loadAllWatchlist()
+    if (currentGroupId.value === String(id)) {
+      viewMode.value = 'cards'
+    }
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || '删除失败')
   }
 }
 
@@ -656,6 +807,21 @@ onMounted(() => {
 .add-text {
   font-size: 14px;
   font-weight: 500;
+}
+
+/* 分组卡片操作按钮 */
+.card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+.group-card:hover .card-actions {
+  opacity: 1;
 }
 
 /* 列表视图 */

@@ -25,7 +25,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'announcements',
-        name: 'Announcements',
+        name: 'AnnouncementCenter',
         component: () => import('@/views/Announcement.vue')
       },
       {

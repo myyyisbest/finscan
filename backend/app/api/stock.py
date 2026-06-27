@@ -235,42 +235,42 @@ def get_stock_profile(code: str, db: Session = Depends(get_db)):
         profile_error = str(e)
         log.warning("akshare stock_profile_cninfo 失败: %s", e)
 
-    # 2) 巨潮公告（最近90天）
+    # 2) 东方财富公告（最近90天）
     announcements = []
     announce_error = None
     try:
         import akshare as ak
         from datetime import datetime, timedelta
         end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=90)).strftime("%Y%m%d")
-        # 使用新版本akshare接口（用户给的stock_cninfo在新版已重命名）
-        df_ann = ak.stock_zh_a_disclosure_report_cninfo(
-            symbol=code_clean,
-            market="沪深京",
-            start_date=start_date,
+        start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
+        df_ann = ak.stock_individual_notice_report(
+            security=code_clean,
+            symbol="全部",
+            begin_date=start_date,
             end_date=end_date,
         )
         if df_ann is not None and len(df_ann) > 0:
-            # 按公告时间倒序
-            df_ann = df_ann.sort_values("公告时间", ascending=False)
+            # 按公告日期倒序
+            df_ann = df_ann.sort_values("公告日期", ascending=False)
             for _, row in df_ann.head(20).iterrows():
-                ann_time = row.get("公告时间", "")
-                ann_time_str = ""
-                if ann_time is not None and str(ann_time) != "nan":
+                ann_date = row.get("公告日期", "")
+                ann_date_str = ""
+                if ann_date is not None and str(ann_date) != "nan":
                     try:
-                        ann_time_str = pd.Timestamp(ann_time).strftime("%Y-%m-%d")
+                        ann_date_str = pd.Timestamp(ann_date).strftime("%Y-%m-%d")
                     except Exception:
-                        ann_time_str = str(ann_time)[:10]
+                        ann_date_str = str(ann_date)[:10]
                 announcements.append({
                     "title": str(row.get("公告标题", "")),
-                    "date": ann_time_str,
-                    "time": str(ann_time) if ann_time is not None else "",
-                    "sec_name": str(row.get("简称", "")),
-                    "url": str(row.get("公告链接", "")),
+                    "date": ann_date_str,
+                    "time": ann_date_str,
+                    "sec_name": str(row.get("名称", "")),
+                    "url": str(row.get("网址", "")),
+                    "ann_type": str(row.get("公告类型", "")),
                 })
     except Exception as e:
         announce_error = str(e)
-        log.warning("akshare stock_zh_a_disclosure_report_cninfo 失败: %s", e)
+        log.warning("akshare stock_individual_notice_report 失败: %s", e)
 
     return success_response({
         "basic": basic_info,
