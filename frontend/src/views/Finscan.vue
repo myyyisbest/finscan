@@ -6,13 +6,14 @@
         <a-select
           v-model:value="selectedCode"
           show-search
-          placeholder="输入股票代码或名称搜索"
+          placeholder="选择自选股票或搜索"
           style="width: 200px"
           :filter-option="false"
           @search="onSearch"
           @change="onStockSelect"
+          @focus="loadWatchlistStocks"
         >
-          <a-select-option v-for="s in searchResults" :key="s.code" :value="s.code">
+          <a-select-option v-for="s in allOptions" :key="s.code" :value="s.code">
             {{ s.name }} ({{ s.code }})
           </a-select-option>
         </a-select>
@@ -135,8 +136,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h } from 'vue'
+import { ref, computed, h, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
+import { watchlistApi } from '@/api/finance'
 
 interface SearchResult {
   code: string
@@ -169,9 +171,17 @@ interface Report {
 
 const selectedCode = ref<string>('')
 const searchResults = ref<SearchResult[]>([])
+const watchlistStocks = ref<SearchResult[]>([])
 const analyzing = ref(false)
 const report = ref<Report | null>(null)
 const activeKeys = ref(['layer0', 'layer1'])
+
+const allOptions = computed(() => {
+  if (searchResults.value.length > 0) {
+    return searchResults.value
+  }
+  return watchlistStocks.value
+})
 
 const riskLevelClass = computed(() => {
   if (!report.value) return ''
@@ -258,6 +268,21 @@ async function onSearch(value: string) {
   }
 }
 
+async function loadWatchlistStocks() {
+  if (watchlistStocks.value.length > 0) return
+  try {
+    const res = await watchlistApi.list()
+    if (res.code === 0) {
+      watchlistStocks.value = (res.data || []).map((s: any) => ({
+        code: s.stock_code,
+        name: s.stock_name,
+      }))
+    }
+  } catch (e) {
+    console.error('Failed to load watchlist:', e)
+  }
+}
+
 function onStockSelect(code: string) {
   selectedCode.value = code
 }
@@ -283,6 +308,10 @@ async function analyze() {
     analyzing.value = false
   }
 }
+
+onMounted(() => {
+  loadWatchlistStocks()
+})
 </script>
 
 <script lang="ts">

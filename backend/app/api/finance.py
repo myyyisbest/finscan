@@ -118,6 +118,24 @@ def get_main_indicators(
                 result.append(None)
         return result
 
+    def cf_col(key):
+        """从现金流量表获取数据"""
+        result = []
+        for dt in dates:
+            r = bs_map.get(dt)
+            if r and r.cashflow_json:
+                v = r.cashflow_json.get(key)
+                if v is not None and not (isinstance(v, float) and v != v):
+                    try:
+                        result.append(float(v))
+                    except (ValueError, TypeError):
+                        result.append(None)
+                else:
+                    result.append(None)
+            else:
+                result.append(None)
+        return result
+
     data = {
         "report_dates": dates,
         "report_names": names,

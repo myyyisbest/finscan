@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
@@ -374,6 +374,14 @@ const handleResize = () => {
 onMounted(async () => {
   await loadGroups()
   window.addEventListener('resize', handleResize)
+})
+
+watch(compareType, () => {
+  nextTick(() => {
+    if (compareData.value.length > 0) {
+      initCharts()
+    }
+  })
 })
 
 onUnmounted(() => {
