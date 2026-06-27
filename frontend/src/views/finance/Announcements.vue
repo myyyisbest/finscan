@@ -24,9 +24,8 @@
               <div class="item-content">
                 <a
                   class="announce-title"
-                  :href="getUrl(item.url)"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="javascript:void(0)"
+                  @click="openAnnouncement(item.url)"
                 >
                   {{ item.title }}
                 </a>
@@ -36,7 +35,7 @@
                 </div>
               </div>
               <div class="item-action">
-                <a-button type="link" size="small" @click.stop="openUrl(item.url)">
+                <a-button type="link" size="small" @click="openAnnouncement(item.url)">
                   查看原文
                 </a-button>
               </div>
@@ -46,7 +45,7 @@
 
         <div v-if="announcements.length" class="list-footer">
           <span class="footer-text">
-            共 {{ announcements.length }} 条公告 · 数据来源：巨潮资讯
+            共 {{ announcements.length }} 条公告 · 数据来源：东方财富
           </span>
         </div>
       </div>
@@ -76,15 +75,16 @@ const announcements = ref<Announcement[]>([])
 const errorMsg = ref('')
 
 function getUrl(url: string): string {
-  if (!url) return ''
+  if (!url) return 'javascript:void(0)'
   if (url.startsWith('http://') || url.startsWith('https://')) return url
   return 'https://' + url
 }
 
-function openUrl(url: string) {
-  if (url) {
-    window.open(getUrl(url), '_blank', 'noopener,noreferrer')
-  }
+function openAnnouncement(url: string) {
+  if (!url) return
+  const fullUrl = getUrl(url)
+  // 在云环境中使用 location.href 替代 window.open 更可靠
+  window.location.href = fullUrl
 }
 
 async function loadData() {
