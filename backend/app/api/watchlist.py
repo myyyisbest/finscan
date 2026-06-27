@@ -118,10 +118,38 @@ def add_stock(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """添加股票到自选。"""
-    code = body.stock_code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
+    """添加股票到自选。支持输入6位代码或股票名称。"""
+    raw = body.stock_code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "").strip()
+
+    from app.api.stock import _get_all_stocks, _detect_market
+    all_stocks = _get_all_stocks()
+
+    code = None
+    name = body.stock_name or raw
+
+    # 情况1：输入的是6位数字代码
+    if len(raw) == 6 and raw.isdigit():
+        code = raw
+        # 从akshare列表查找名称
+        for s_code, s_name in all_stocks:
+            if s_code == code:
+                name = s_name
+                break
+    else:
+        # 情况2：输入的是名称，从akshare列表查找代码
+        raw_clean = raw.replace(' ', '').replace('\u3000', '')
+        for s_code, s_name in all_stocks:
+            s_name_clean = s_name.replace(' ', '').replace('\u3000', '')
+            if s_name_clean == raw_clean or raw_clean in s_name_clean:
+                code = s_code
+                name = s_name
+                break
+
+    if not code:
+        return fail_response("未找到对应的股票，请确认输入正确的代码或名称")
+
     if len(code) != 6 or not code.isdigit():
-        return fail_response("股票代码格式错误，请输入6位数字代码")
+        return fail_response("股票代码格式错误")
 
     existing = (
         db.query(Watchlist)
@@ -131,39 +159,29 @@ def add_stock(
     if existing:
         return fail_response("已在自选股中")
 
-    # 获取股票名称：优先从stock_basic，其次从akshare全量列表
-    name = body.stock_name
+    # 自动入库到stock_basic
     stock = db.query(StockBasic).filter(StockBasic.stock_code == code).first()
-    if stock and stock.stock_name and stock.stock_name != code:
-        name = stock.stock_name
-    else:
-        # 从akshare全量列表查找名称
-        from app.api.stock import _get_all_stocks, _detect_market
-        all_stocks = _get_all_stocks()
-        for s_code, s_name in all_stocks:
-            if s_code == code:
-                name = s_name
-                break
-        # 自动入库到stock_basic
-        if not stock:
-            market = _detect_market(code)
-            stock = StockBasic(
-                stock_code=code,
-                market=market,
-                secucode=f"{market}{code}",
-                stock_name=name or code,
-            )
-            db.add(stock)
+    if not stock:
+        market = _detect_market(code)
+        stock = StockBasic(
+            stock_code=code,
+            market=market,
+            secucode=f"{market}{code}",
+            stock_name=name,
+        )
+        db.add(stock)
+    elif not stock.stock_name or stock.stock_name == code:
+        stock.stock_name = name
 
     w = Watchlist(
         user_id=current_user.id,
         stock_code=code,
-        stock_name=name or code,
+        stock_name=name,
         remark=body.remark,
     )
     db.add(w)
     db.commit()
-    return success_response({"stock_code": code, "stock_name": name or code})
+    return success_response({"stock_code": code, "stock_name": name})
 
 
 @router.delete("/{code}")

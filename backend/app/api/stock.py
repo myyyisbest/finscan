@@ -33,11 +33,13 @@ def _get_all_stocks():
         df = ak.stock_info_a_code_name()
         if df is not None and len(df) > 0:
             stocks = []
+            seen = set()
             for _, row in df.iterrows():
                 code = str(row.get('code', '')).zfill(6)
-                name = str(row.get('name', ''))
-                if len(code) == 6 and code.isdigit() and name and name != 'nan':
+                name = str(row.get('name', '')).replace(' ', '').replace('\u3000', '')
+                if len(code) == 6 and code.isdigit() and name and name != 'nan' and code not in seen:
                     stocks.append((code, name))
+                    seen.add(code)
             _stock_list_cache = stocks
             _stock_list_cache_time = now
             log.info("加载A股列表缓存: %d 只股票", len(stocks))
@@ -97,13 +99,15 @@ def search_stock(
     # 本地没有，从akshare全量列表搜索
     all_stocks = _get_all_stocks()
     matched = []
+    kw_clean = kw.replace(' ', '').replace('\u3000', '')
     if all_stocks:
         for code, name in all_stocks:
+            name_clean = name.replace(' ', '').replace('\u3000', '')
             if kw.isdigit():
                 if kw in code:
                     matched.append((code, name))
             else:
-                if kw in name or kw in code:
+                if kw_clean in name_clean or kw in code:
                     matched.append((code, name))
             if len(matched) >= 20:
                 break

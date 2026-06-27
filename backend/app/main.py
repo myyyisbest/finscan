@@ -28,12 +28,29 @@ async def lifespan(_: FastAPI):
     setup_logging()
     log = get_logger(__name__)
     log.info("%s 启动 (debug=%s, db=%s)", settings.APP_NAME, settings.DEBUG, settings.DATABASE_URL)
+
+    # 预加载A股股票列表缓存
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _preload_stock_list)
+    except Exception as e:
+        log.warning("预加载股票列表失败: %s", e)
+
     from app.scheduler import start_scheduler
     start_scheduler()
     yield
     from app.scheduler import shutdown_scheduler
     shutdown_scheduler()
     log.info("%s 关闭", settings.APP_NAME)
+
+
+def _preload_stock_list():
+    """预加载A股列表到缓存。"""
+    from app.api.stock import _get_all_stocks
+    stocks = _get_all_stocks()
+    log = get_logger(__name__)
+    log.info("预加载A股列表完成: %d 只", len(stocks))
 
 
 app = FastAPI(

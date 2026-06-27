@@ -292,18 +292,34 @@ function selectStock(item: SearchResult) {
 }
 
 async function confirmAdd() {
+  let input = addKeyword.value.trim()
+  if (!input) {
+    message.warning('请输入股票代码或名称')
+    return
+  }
+
   let code = ''
   let name = ''
 
   if (selectedToAdd.value) {
     code = selectedToAdd.value.stock_code
     name = selectedToAdd.value.stock_name
-  } else if (/^\d{6}$/.test(addKeyword.value)) {
-    code = addKeyword.value
-    name = addKeyword.value
+  } else if (/^\d{6}$/.test(input)) {
+    code = input
+    name = input
   } else {
-    message.warning('请选择股票或输入6位股票代码')
-    return
+    // 输入的是名称，从搜索结果里找第一个匹配的
+    const matched = addSearchResults.value.find(s => 
+      s.stock_name === input || s.stock_name.includes(input)
+    )
+    if (matched) {
+      code = matched.stock_code
+      name = matched.stock_name
+    } else {
+      // 搜索结果为空但用户点了添加，直接把输入当关键词发后端验证
+      code = input
+      name = input
+    }
   }
 
   addLoading.value = true
