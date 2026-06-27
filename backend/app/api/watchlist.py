@@ -37,7 +37,7 @@ def list_groups(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """获取用户的自选分组列表。"""
+    """获取用户的自选分组列表（包含每个分组下的股票）。"""
     groups = (
         db.query(WatchlistGroup)
         .filter(WatchlistGroup.user_id == current_user.id)
@@ -46,12 +46,44 @@ def list_groups(
     )
     result = []
     for g in groups:
-        count = db.query(Watchlist).filter(Watchlist.user_id == current_user.id, Watchlist.group_id == g.id).count()
+        stocks = (
+            db.query(Watchlist, StockBasic)
+            .join(StockBasic, Watchlist.stock_code == StockBasic.stock_code)
+            .filter(Watchlist.user_id == current_user.id, Watchlist.group_id == g.id)
+            .all()
+        )
+        stock_list = [
+            {
+                "stock_code": w.stock_code,
+                "stock_name": w.stock_name or (sb.stock_name if sb else w.stock_code),
+                "market": sb.market if sb else "",
+                "industry": sb.industry if sb else None,
+            }
+            for w, sb in stocks
+        ]
+        # 默认分组(group_id=0)特殊处理
+        if g.id == 0:
+            all_stocks = (
+                db.query(Watchlist, StockBasic)
+                .join(StockBasic, Watchlist.stock_code == StockBasic.stock_code)
+                .filter(Watchlist.user_id == current_user.id, Watchlist.group_id == 0)
+                .all()
+            )
+            stock_list = [
+                {
+                    "stock_code": w.stock_code,
+                    "stock_name": w.stock_name or (sb.stock_name if sb else w.stock_code),
+                    "market": sb.market if sb else "",
+                    "industry": sb.industry if sb else None,
+                }
+                for w, sb in all_stocks
+            ]
         result.append({
             "id": g.id,
             "name": g.name,
             "sort_order": g.sort_order,
-            "stock_count": count,
+            "stock_count": len(stock_list),
+            "stocks": stock_list,
             "created_at": str(g.created_at),
         })
     return success_response(result)

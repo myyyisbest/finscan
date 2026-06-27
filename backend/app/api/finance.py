@@ -180,20 +180,19 @@ def get_main_indicators(
                 ]
             },
             {
-                "name": "利润表关键科目",
+                "name": "关键财务报表项目",
                 "items": [
+                    # 利润表
                     {"name": "营业总收入", "key": "TOTALOPERATEREVE", "values": col("TOTALOPERATEREVE")},
                     {"name": "毛利", "key": "MLR", "values": col("MLR")},
                     {"name": "归母净利润", "key": "PARENTNETPROFIT", "values": col("PARENTNETPROFIT")},
                     {"name": "扣非净利润", "key": "KCFJCXSYJLR", "values": col("KCFJCXSYJLR")},
-                ]
-            },
-            {
-                "name": "资产负债关键科目",
-                "items": [
+                    # 资产负债表
                     {"name": "总资产", "key": "TOTAL_ASSETS", "values": bs_col("TOTAL_ASSETS")},
                     {"name": "总负债", "key": "TOTAL_LIABILITIES", "values": bs_col("TOTAL_LIABILITIES")},
                     {"name": "股东权益合计", "key": "TOTAL_EQUITY", "values": bs_col("TOTAL_EQUITY")},
+                    # 现金流量表
+                    {"name": "经营现金流净额", "key": "OPERATECASHNET", "values": cf_col("NETCASH_OPERATE")},
                 ]
             },
         ]
@@ -456,27 +455,20 @@ def _build_main_indicators_from_reports(fin_reports, bs_map):
                 ]
             },
             {
-                "name": "利润表关键科目",
+                "name": "关键财务报表项目",
                 "items": [
+                    # 利润表
                     {"name": "营业总收入", "key": "TOTALOPERATEREVE", "values": col("total_revenue")},
                     {"name": "营业利润", "key": "OPERATEPROFIT", "values": col("operate_profit")},
                     {"name": "利润总额", "key": "TOTALPROFIT", "values": col("total_profit")},
                     {"name": "归母净利润", "key": "PARENTNETPROFIT", "values": col("net_profit_parent")},
                     {"name": "扣非净利润", "key": "KCFJCXSYJLR", "values": col("deduct_net_profit")},
-                ]
-            },
-            {
-                "name": "资产负债关键科目",
-                "items": [
+                    # 资产负债表
                     {"name": "总资产", "key": "TOTAL_ASSETS", "values": col("total_assets")},
                     {"name": "总负债", "key": "TOTAL_LIABILITIES", "values": col("total_liabilities")},
                     {"name": "股东权益合计", "key": "TOTAL_EQUITY", "values": col("total_equity")},
-                ]
-            },
-            {
-                "name": "现金流量关键科目",
-                "items": [
-                    {"name": "经营活动现金流净额", "key": "OPERATECASHNET", "values": col("operate_cash_net")},
+                    # 现金流量表
+                    {"name": "经营现金流净额", "key": "OPERATECASHNET", "values": col("operate_cash_net")},
                 ]
             },
         ]

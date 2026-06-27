@@ -498,10 +498,9 @@ def _update_log(code: str, task_type: str, status: str, error_msg: str = None, r
 
 
 def collect_announcements(code: str, days: int = 180) -> int:
-    """采集单只股票的公告数据，存入 Announcement 表。返回新增条数。"""
+    """采集单只股票的公告数据，存入 Announcement 表（只保存链接）。返回新增条数。"""
     code = code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
     import akshare as ak
-    import pandas as pd
     from datetime import datetime, timedelta
 
     _update_log(code, "announcement", "collecting")
@@ -521,25 +520,32 @@ def collect_announcements(code: str, days: int = 180) -> int:
         added = 0
         with db_session() as session:
             for _, row in df.iterrows():
-                title = str(row.get("公告标题", "")).strip()
+                url = str(row.get("网址", "")).strip()
                 pub_date = _to_date(row.get("公告日期"))
-                if not title or not pub_date:
+                if not url or not pub_date:
                     continue
 
+                # 只通过链接去重
                 existing = session.query(Announcement).filter(
                     Announcement.stock_code == code,
-                    Announcement.ann_title == title,
-                    Announcement.publish_date == pub_date,
+                    Announcement.pdf_url == url,
                 ).first()
                 if existing:
+                    # 更新标题和类型（如果有的话）
+                    if not existing.ann_title:
+                        title = str(row.get("公告标题", "")).strip()
+                        if title and title != "nan":
+                            existing.ann_title = title
+                            existing.ann_type = str(row.get("公告类型", "")) or None
+                            session.commit()
                     continue
 
                 ann = Announcement(
                     stock_code=code,
-                    ann_title=title,
-                    ann_type=str(row.get("公告类型", "")) or None,
+                    ann_title=None,  # 不保存标题文字
+                    ann_type=None,   # 不保存类型
                     publish_date=pub_date,
-                    pdf_url=str(row.get("网址", "")) or None,
+                    pdf_url=url,
                     source="eastmoney",
                 )
                 session.add(ann)
