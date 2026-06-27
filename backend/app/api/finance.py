@@ -256,6 +256,129 @@ def _build_main_indicators_from_reports(fin_reports, bs_map):
                 result.append(None)
         return result
 
+    def cf_col(key):
+        """从现金流量表JSON获取数据"""
+        result = []
+        for r in fin_reports:
+            if r.cashflow_json:
+                v = r.cashflow_json.get(key)
+                if v is not None and not (isinstance(v, float) and v != v):
+                    try:
+                        result.append(float(v))
+                    except (ValueError, TypeError):
+                        result.append(None)
+                else:
+                    result.append(None)
+            else:
+                result.append(None)
+        return result
+
+    # 计算周转率需要的平均值函数
+    def calc_avg(cur_list, prev_key=None):
+        """计算平均余额（当前期+上期）/2"""
+        result = []
+        for i, cur in enumerate(cur_list):
+            if i < len(cur_list) - 1:
+                prev = cur_list[i + 1]
+            else:
+                prev = None
+            if cur is not None and prev is not None and prev > 0:
+                result.append((float(cur) + float(prev)) / 2)
+            elif cur is not None:
+                result.append(float(cur))
+            else:
+                result.append(None)
+        return result
+
+    # 营运能力指标计算
+    revenue_list = inc_col("OPERATE_INCOME") or col("total_revenue")
+    cost_list = inc_col("OPERATE_COST")
+    total_assets_list = col("total_assets")
+    avg_total_assets = calc_avg(total_assets_list)
+
+    inventory_list = bs_col("INVENTORY")
+    avg_inventory = calc_avg(inventory_list)
+
+    receivable_list = bs_col("ACCOUNTS_RECE")
+    avg_receivable = calc_avg(receivable_list)
+
+    # 周转率 = 营收/成本 / 平均资产
+    def calc_turnover(numerator_list, denominator_list):
+        result = []
+        for i, num in enumerate(numerator_list):
+            den = denominator_list[i] if i < len(denominator_list) else None
+            if num is not None and den and den > 0:
+                result.append(round(float(num) / float(den), 4))
+            else:
+                result.append(None)
+        return result
+
+    def calc_turnover_days(turnover_list):
+        result = []
+        for t in turnover_list:
+            if t is not None and t > 0:
+                result.append(round(360 / t, 2))
+            else:
+                result.append(None)
+        return result
+
+    total_asset_turnover = calc_turnover(revenue_list, avg_total_assets)
+    total_asset_turnover_days = calc_turnover_days(total_asset_turnover)
+    inventory_turnover = calc_turnover(cost_list, avg_inventory)
+    inventory_turnover_days = calc_turnover_days(inventory_turnover)
+    receivable_turnover = calc_turnover(revenue_list, avg_receivable)
+    receivable_turnover_days = calc_turnover_days(receivable_turnover)
+
+    # 收益质量指标
+    operate_cash_list = cf_col("NETCASH_OPERATE") or cf_col("OPERATE_NETCASH_BALANCE") or col("operate_cash_net")
+    sales_cash_list = cf_col("SALES_SERVICES")
+    contract_liab_list = bs_col("CONTRACT_LIAB")
+    advance_receiv_list = bs_col("ADVANCE_RECEIVABLES")
+
+    # 预收账款 = 合同负债 + 预收款项
+    total_advance = []
+    for i in range(len(fin_reports)):
+        cl = contract_liab_list[i] if i < len(contract_liab_list) else None
+        ar = advance_receiv_list[i] if i < len(advance_receiv_list) else None
+        if cl is not None or ar is not None:
+            total_advance.append((cl or 0) + (ar or 0))
+        else:
+            total_advance.append(None)
+
+    net_profit_list = col("net_profit")
+
+    def calc_ratio(numerator_list, denominator_list):
+        result = []
+        for i, num in enumerate(numerator_list):
+            den = denominator_list[i] if i < len(denominator_list) else None
+            if num is not None and den and den != 0:
+                result.append(round(float(num) / float(den) * 100, 2))
+            else:
+                result.append(None)
+        return result
+
+    operate_cash_to_revenue = calc_ratio(operate_cash_list, revenue_list)
+    sales_cash_to_revenue = calc_ratio(sales_cash_list, revenue_list)
+    advance_to_revenue = calc_ratio(total_advance, revenue_list)
+    operate_cash_to_profit = calc_ratio(operate_cash_list, net_profit_list)
+
+    # 资本支出/折旧摊销
+    # 资本支出 = 购建固定资产、无形资产和其他长期资产支付的现金
+    capex_list = cf_col("CONSTRUCT_LONG_ASSET")
+    # 折旧摊销 = 固定资产折旧 + 无形资产摊销 + 长期待摊费用摊销（从间接法获取，没有则用资产负债表估算）
+    depreciation_list = cf_col("FIXED_ASSET_DEPRECIATION")
+    amortization_list = cf_col("INTANGIBLE_ASSET_AMORTIZATION")
+    total_dep_amort = []
+    for i in range(len(fin_reports)):
+        dep = depreciation_list[i] if i < len(depreciation_list) else None
+        amort = amortization_list[i] if i < len(amortization_list) else None
+        if dep is not None or amort is not None:
+            total_dep_amort.append((dep or 0) + (amort or 0))
+        else:
+            total_dep_amort.append(None)
+
+    capex_to_dep = calc_ratio(capex_list, total_dep_amort)
+
     # 计算每股指标需要的总股本
     share_capital_list = bs_col("SHARE_CAPITAL")
 
@@ -309,6 +432,27 @@ def _build_main_indicators_from_reports(fin_reports, bs_map):
                     {"name": "资产负债率(%)", "key": "ZCFZL", "values": col("debt_ratio")},
                     {"name": "流动比率", "key": "LD", "values": col("current_ratio")},
                     {"name": "速动比率", "key": "SD", "values": col("quick_ratio")},
+                ]
+            },
+            {
+                "name": "营运能力",
+                "items": [
+                    {"name": "总资产周转天数(天)", "key": "ZZCZZTS", "values": total_asset_turnover_days},
+                    {"name": "存货周转天数(天)", "key": "CHZZTS", "values": inventory_turnover_days},
+                    {"name": "应收账款周转天数(天)", "key": "YSZKZZTS", "values": receivable_turnover_days},
+                    {"name": "总资产周转率(次)", "key": "TOAZZL", "values": total_asset_turnover},
+                    {"name": "存货周转率(次)", "key": "CHZZL", "values": inventory_turnover},
+                    {"name": "应收账款周转率(次)", "key": "YSZKZZL", "values": receivable_turnover},
+                ]
+            },
+            {
+                "name": "收益质量",
+                "items": [
+                    {"name": "预收账款/营业收入(%)", "key": "YSZKYYSR", "values": advance_to_revenue},
+                    {"name": "销售净现金流/营业收入(%)", "key": "XSJXLYYSR", "values": sales_cash_to_revenue},
+                    {"name": "经营净现金流/营业收入(%)", "key": "JYXJLYYSR", "values": operate_cash_to_revenue},
+                    {"name": "经营现金流/净利润(%)", "key": "JYXJLJLR", "values": operate_cash_to_profit},
+                    {"name": "资本支出/折旧摊销(%)", "key": "ZBZCZJTX", "values": capex_to_dep},
                 ]
             },
             {
