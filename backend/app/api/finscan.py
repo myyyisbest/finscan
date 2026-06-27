@@ -44,15 +44,12 @@ def _get_report_years(db: Session, stock_code: str, years: int = 5) -> list:
 
 def _build_rule_context(db: Session, stock_code: str, report_year: int) -> RuleContext:
     """从数据库构建规则上下文"""
-    # 获取股票信息
     stock = db.query(StockBasic).filter(StockBasic.stock_code == stock_code).first()
     stock_name = stock.stock_name if stock else ""
     industry = stock.industry if stock else ""
 
-    # 获取近5年年报
     reports = _get_report_years(db, stock_code, 5)
 
-    # 构建 income_list
     income_list = []
     balance_list = []
     cashflow_list = []
@@ -63,65 +60,61 @@ def _build_rule_context(db: Session, stock_code: str, report_year: int) -> RuleC
         balance_json = r.balance_json or {}
         cashflow_json = r.cashflow_json or {}
 
-        # 提取利润表数据
         income_list.append({
             "end_date": str(r.report_date),
-            "revenue": income_json.get("revenue") or income_json.get("operate_income"),
-            "revenue_yoy": income_json.get("revenue_yoy"),
-            "oper_cost": income_json.get("operate_cost"),
-            "gross_profit": income_json.get("gross_profit"),
-            "sell_exp": income_json.get("sell_exp"),
-            "admin_exp": income_json.get("admin_exp"),
-            "rd_exp": income_json.get("rd_exp"),
-            "fin_exp": income_json.get("fin_exp"),
-            "assets_impair_loss": income_json.get("assets_impair_loss"),
-            "credit_impa_loss": income_json.get("credit_impa_loss"),
-            "oth_biz_income": income_json.get("other_business_revenue"),
-            "invest_income": income_json.get("invest_income"),
-            "operate_profit": income_json.get("operate_profit"),
-            "net_profit": income_json.get("net_profit"),
-            "n_income_attr_p": income_json.get("n_income_attr_p"),
-            "deduct_non_recurring": income_json.get("deduct_non_recurring"),
-            "basic_eps": income_json.get("base_eps"),
+            "revenue": income_json.get("TOTAL_OPERATE_INCOME") or income_json.get("OPERATE_INCOME"),
+            "revenue_yoy": income_json.get("TOTAL_OPERATE_INCOME_YOY") or income_json.get("OPERATE_INCOME_YOY"),
+            "oper_cost": income_json.get("OPERATE_COST") or income_json.get("TOTAL_OPERATE_COST"),
+            "gross_profit": None,
+            "sell_exp": income_json.get("SALE_EXPENSE"),
+            "admin_exp": income_json.get("MANAGE_EXPENSE"),
+            "rd_exp": income_json.get("RESEARCH_EXPENSE"),
+            "fin_exp": income_json.get("FINANCE_EXPENSE"),
+            "assets_impair_loss": income_json.get("ASSET_IMPAIRMENT_LOSS"),
+            "credit_impa_loss": income_json.get("CREDIT_IMPAIRMENT_INCOME"),
+            "oth_biz_income": income_json.get("OTHER_INCOME"),
+            "invest_income": income_json.get("INVEST_INCOME"),
+            "operate_profit": income_json.get("OPERATE_PROFIT"),
+            "net_profit": income_json.get("NETPROFIT"),
+            "n_income_attr_p": income_json.get("PARENT_NETPROFIT"),
+            "deduct_non_recurring": income_json.get("DEDUCT_PARENT_NETPROFIT"),
+            "basic_eps": income_json.get("BASIC_EPS"),
         })
 
-        # 提取资产负债表数据
         balance_list.append({
             "end_date": str(r.report_date),
-            "total_assets": balance_json.get("total_assets"),
-            "total_liab": balance_json.get("total_liabilities"),
-            "total_hldr_eqy_exc_min_int": balance_json.get("total_hldr_eqy_exc_min_int"),
-            "money_cap": balance_json.get("money_cap"),
-            "accounts_receiv": balance_json.get("accounts_receiv"),
-            "oth_receiv": balance_json.get("other_receivable"),
-            "inventories": balance_json.get("inventories"),
-            "total_current_assets": balance_json.get("total_current_assets"),
-            "fix_assets": balance_json.get("fixed_assets"),
-            "cip": balance_json.get("construction_materials"),
-            "goodwill": balance_json.get("goodwill"),
-            "lt_amort_deferred_exp": balance_json.get("long_term_deferred_expenses"),
-            "intang_assets": balance_json.get("intangible_assets"),
-            "st_borr": balance_json.get("short_term_borrow"),
-            "lt_borr": balance_json.get("long_term_loan"),
-            "bond_payable": balance_json.get("bonds_payable"),
-            "accounts_payable": balance_json.get("accounts_payable"),
-            "advance_receipts": balance_json.get("advance_peceipts"),
-            "contract_liab": balance_json.get("contract_liab"),
-            "total_current_liab": balance_json.get("total_current_liabilities"),
+            "total_assets": balance_json.get("TOTAL_ASSETS"),
+            "total_liab": balance_json.get("TOTAL_LIABILITIES") or balance_json.get("TOTAL_LIAB"),
+            "total_hldr_eqy_exc_min_int": balance_json.get("TOTAL_EQUITY") or balance_json.get("TOTAL_PARENT_EQUITY"),
+            "money_cap": balance_json.get("MONETARYFUNDS"),
+            "accounts_receiv": balance_json.get("ACCOUNTS_RECE") or balance_json.get("NOTE_ACCOUNTS_RECE"),
+            "oth_receiv": balance_json.get("TOTAL_OTHER_RECE") or balance_json.get("OTHER_RECEIVABLE"),
+            "inventories": balance_json.get("INVENTORY"),
+            "total_current_assets": balance_json.get("TOTAL_CURRENT_ASSETS"),
+            "fix_assets": balance_json.get("FIXED_ASSET"),
+            "cip": balance_json.get("CIP"),
+            "goodwill": balance_json.get("GOODWILL"),
+            "lt_amort_deferred_exp": balance_json.get("LONG_PREPAID_EXPENSE") or balance_json.get("LONG_TERM_PAYROLL_PAYABLE"),
+            "intang_assets": balance_json.get("INTANGIBLE_ASSET"),
+            "st_borr": balance_json.get("SHORT_LOAN") or balance_json.get("ST_BORR"),
+            "lt_borr": balance_json.get("LONG_LOAN") or balance_json.get("LT_BORR"),
+            "bond_payable": balance_json.get("BOND_PAYABLE"),
+            "accounts_payable": balance_json.get("ACCOUNTS_PAYABLE") or balance_json.get("NOTE_ACCOUNTS_PAYABLE"),
+            "advance_receipts": balance_json.get("ADVANCE_RECEIPTS"),
+            "contract_liab": balance_json.get("CONTRACT_LIAB"),
+            "total_current_liab": balance_json.get("TOTAL_CURRENT_LIAB"),
         })
 
-        # 提取现金流量表数据
         cashflow_list.append({
             "end_date": str(r.report_date),
-            "n_cashflow_act": cashflow_json.get("n_cashflow_act"),
-            "n_cashflow_inv_act": cashflow_json.get("n_cashflow_inv_act"),
-            "n_cash_flows_fnc_act": cashflow_json.get("n_cash_flows_fnc_act"),
-            "c_recp_prov_sg_act": cashflow_json.get("c_recp_prov_sg"),
-            "c_pay_acq_const_fiolta": cashflow_json.get("c_pay_acq_const_fiolta"),
-            "free_cashflow": cashflow_json.get("free_cashflow"),
+            "n_cashflow_act": cashflow_json.get("NETCASH_OPERATE"),
+            "n_cashflow_inv_act": cashflow_json.get("NETCASH_INVEST"),
+            "n_cash_flows_fnc_act": cashflow_json.get("NETCASH_FINANCE"),
+            "c_recp_prov_sg_act": cashflow_json.get("SALES_SERVICES"),
+            "c_pay_acq_const_fiolta": cashflow_json.get("CONSTRUCT_LONG_ASSET"),
+            "free_cashflow": None,
         })
 
-        # 提取财务指标
         indicator_list.append({
             "end_date": str(r.report_date),
             "roe": r.roe,
@@ -133,21 +126,19 @@ def _build_rule_context(db: Session, stock_code: str, report_year: int) -> RuleC
             "debt_to_assets": r.debt_ratio,
             "current_ratio": r.current_ratio,
             "quick_ratio": r.quick_ratio,
-            "inv_turn": balance_json.get("inventory_turnover_days"),
-            "ar_turn": balance_json.get("accounts_receivable_turnover_days"),
-            "assets_turn": balance_json.get("total_assets_turnover"),
+            "inv_turn": None,
+            "ar_turn": None,
+            "assets_turn": None,
         })
 
-    # 获取审计信息
     latest_report = reports[0] if reports else None
-    audit_result = "标准无保留意见"  # 默认值
+    audit_result = "标准无保留意见"
     ann_date = None
     end_date = None
 
     if latest_report:
-        if latest_report.income_json:
-            audit_result = latest_report.income_json.get("audit_result", "标准无保留意见")
-        ann_date = str(latest_report.notice_date) if latest_report.notice_date else None
+        if latest_report.notice_date:
+            ann_date = str(latest_report.notice_date)
         end_date = str(latest_report.report_date)
 
     return RuleContext(

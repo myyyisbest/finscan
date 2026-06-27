@@ -22,8 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.db import db_session as _default_db_session
 from app.models import (
-    BalanceSheet, IncomeStatement, CashFlow, FinIndicator,
-    RiskRule as DBRiskRule, RiskReport, RiskRuleResult,
+    RiskReport, RiskRuleResult, StockBasic,
 )
 
 
@@ -687,69 +686,234 @@ class RiskEngine:
         self.session = session
 
     def load_financial_data(self, stock_code: str, report_date: date, years: int = 6) -> FinancialContext:
-        """从数据库加载指定报告期的财务数据（含历史序列）。"""
-        from app.models import BalanceSheet, IncomeStatement, CashFlow, FinIndicator
-        # 历史窗口
+        """从数据库加载指定报告期的财务数据（含历史序列）。优先使用 FinReport 模型。"""
+        from app.models import FinReport
+        stock_code = stock_code.upper().replace("SH", "").replace("SZ", "").replace("BJ", "")
         start_year = report_date.year - years
         start_date = date(start_year, 1, 1)
 
-        def _rows(model_cls, order_col="report_date"):
-            return (
-                self.session.query(model_cls)
-                .filter(model_cls.stock_code == stock_code, model_cls.report_date <= report_date,
-                        model_cls.report_date >= start_date)
-                .order_by(model_cls.report_date.desc())
-                .all()
+        rows = (
+            self.session.query(FinReport)
+            .filter(
+                FinReport.stock_code == stock_code,
+                FinReport.report_date <= report_date,
+                FinReport.report_date >= start_date,
             )
+            .order_by(FinReport.report_date.desc())
+            .all()
+        )
 
-        def _to_dict(row) -> dict:
-            return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+        BS_MAP = {
+            "TOTAL_ASSETS": "total_assets",
+            "TOTAL_LIAB": "total_liabilities",
+            "TOTAL_LIABILITIES": "total_liabilities",
+            "TOTAL_EQUITY": "total_equity",
+            "TOTAL_HLDEQ": "total_equity",
+            "MONETARYFUNDS": "monetary_funds",
+            "ACCOUNTS_RECE": "accounts_receivable",
+            "ACCOUNTS_RECEIVABLE": "accounts_receivable",
+            "OTHRECE": "other_receivables",
+            "OTHER_RECEIVABLE": "other_receivables",
+            "INVENTORY": "inventory",
+            "GOODWILL": "goodwill",
+            "FIXED_ASSET": "fixed_assets",
+            "CIP": "construction_in_progress",
+            "INTANGIBLE_ASSET": "intangible_assets",
+            "LT_AMORT_DEFERRED_EXP": "long_deferred_expenses",
+            "LONG_TERM_PAYROLL_PAYABLE": "long_deferred_expenses",
+            "ST_BORR": "short_term_borrowings",
+            "SHORT_BORROW": "short_term_borrowings",
+            "LT_BORR": "long_term_borrowings",
+            "LONG_BORROW": "long_term_borrowings",
+            "BOND_PAYABLE": "bonds_payable",
+            "ACCOUNTS_PAYABLE": "accounts_payable",
+            "ADVANCE_RECEIPTS": "advance_receipts",
+            "CONTRACT_LIAB": "contract_liab",
+            "TOTAL_CURRENT_ASSETS": "total_current_assets",
+            "CURRENT_ASSET_BALANCE": "total_current_assets",
+            "TOTAL_CURRENT_LIAB": "total_current_liabilities",
+            "CURRENT_LIAB_BALANCE": "total_current_liabilities",
+        }
 
-        bs_rows = _rows(BalanceSheet)
-        inc_rows = _rows(IncomeStatement)
-        cf_rows = _rows(CashFlow)
-        ind_rows = _rows(FinIndicator)
+        INC_MAP = {
+            "TOTAL_OPERATE_INCOME": "total_revenue",
+            "OPERATE_INCOME": "total_revenue",
+            "OPERATE_COST": "operating_cost",
+            "OPERATING_COST": "operating_cost",
+            "OPERATE_PROFIT": "operating_profit",
+            "OPERATING_PROFIT": "operating_profit",
+            "TOTAL_PROFIT": "total_profit",
+            "NETPROFIT": "net_profit",
+            "NET_PROFIT": "net_profit",
+            "PARENT_NETPROFIT": "net_profit_parent",
+            "DEDUCT_PARENT_NETPROFIT": "deduct_net_profit",
+            "GROSS_PROFIT": "gross_profit",
+            "SALE_EXPENSE": "selling_expenses",
+            "SELL_EXP": "selling_expenses",
+            "MANAGE_EXPENSE": "admin_expenses",
+            "ADMIN_EXP": "admin_expenses",
+            "RD_EXPENSE": "rd_expenses",
+            "FINANCE_EXPENSE": "financial_expenses",
+            "FIN_EXP": "financial_expenses",
+            "ASSET_IMPAIRMENT_LOSS": "asset_impairment_loss",
+            "IMPAIRMENT_LOSS_ASSET": "asset_impairment_loss",
+            "INVEST_INCOME": "investment_income",
+            "INVEST_INCOME_ASSIGN": "investment_income",
+            "OTHER_INCOME": "other_income",
+            "OTHER_BUSINESS_INCOME": "other_business_income",
+            "BASIC_EPS": "basic_eps",
+        }
 
-        def _find(rows, target_date):
-            for r in rows:
-                if r.report_date == target_date:
-                    return _to_dict(r)
-            return {}
+        CF_MAP = {
+            "NETCASH_OPERATE": "operating_cash_net",
+            "OPERATE_NETCASH": "operating_cash_net",
+            "NETCASH_INVEST": "investing_cash_net",
+            "INVEST_NETCASH": "investing_cash_net",
+            "NETCASH_FINANCE": "financing_cash_net",
+            "FINANCE_NETCASH": "financing_cash_net",
+            "SALES_SERVICES": "sales_cash_received",
+            "RECEV_GOODS_SALE": "sales_cash_received",
+            "CONSTRUCT_LONG_ASSET": "construct_long_asset",
+            "CIP_CAPEX": "construct_long_asset",
+            "FREE_CASHFLOW": "free_cash_flow",
+            "FCFF": "free_cash_flow",
+        }
 
-        def _hist(rows):
-            return [_to_dict(r) for r in rows[1:]]
+        def _extract(json_data, field_map):
+            result = {}
+            for src_key, dst_key in field_map.items():
+                v = json_data.get(src_key) if json_data else None
+                if v is not None:
+                    try:
+                        result[dst_key] = Decimal(str(v))
+                    except (ValueError, TypeError):
+                        pass
+            return result
 
-        cur_bs = _find(bs_rows, report_date)
-        cur_inc = _find(inc_rows, report_date)
-        cur_cf = _find(cf_rows, report_date)
-        cur_ind = _find(ind_rows, report_date)
-        # gross_margin / goodwill / 其他应收 也从原始三表补充到 ind dict
-        cur_ind = dict(cur_ind)
-        if cur_inc.get("gross_margin"):
-            cur_ind["gross_margin"] = cur_inc["gross_margin"]
-        if cur_bs.get("goodwill"):
-            cur_ind["goodwill"] = cur_bs["goodwill"]
-        if cur_bs.get("other_receivables"):
-            cur_ind["other_receivables"] = cur_bs["other_receivables"]
-        # 补充 inc 中的科目到 ind（规则统一从 ctx.ind 读取）
+        def _row_to_dicts(row):
+            bs = _extract(row.balance_json, BS_MAP)
+            inc = _extract(row.income_json, INC_MAP)
+            cf = _extract(row.cashflow_json, CF_MAP)
+            if row.total_assets and "total_assets" not in bs:
+                bs["total_assets"] = row.total_assets
+            if row.total_liabilities and "total_liabilities" not in bs:
+                bs["total_liabilities"] = row.total_liabilities
+            if row.total_equity and "total_equity" not in bs:
+                bs["total_equity"] = row.total_equity
+            if row.total_revenue and "total_revenue" not in inc:
+                inc["total_revenue"] = row.total_revenue
+            if row.operate_profit and "operating_profit" not in inc:
+                inc["operating_profit"] = row.operate_profit
+            if row.net_profit and "net_profit" not in inc:
+                inc["net_profit"] = row.net_profit
+            if row.net_profit_parent and "net_profit_parent" not in inc:
+                inc["net_profit_parent"] = row.net_profit_parent
+            if row.operate_cash_net and "operating_cash_net" not in cf:
+                cf["operating_cash_net"] = row.operate_cash_net
+            if row.gross_margin is not None:
+                inc["gross_margin"] = row.gross_margin
+            return bs, inc, cf
+
+        all_dicts = [_row_to_dicts(r) for r in rows]
+
+        cur_bs, cur_inc, cur_cf = {}, {}, {}
+        cur_row = None
+        for i, r in enumerate(rows):
+            if r.report_date == report_date:
+                cur_bs, cur_inc, cur_cf = all_dicts[i]
+                cur_row = r
+                break
+
+        bs_history, inc_history, cf_history = [], [], []
+        for i, r in enumerate(rows):
+            if r.report_date == report_date:
+                continue
+            bs_history.append(all_dicts[i][0])
+            inc_history.append(all_dicts[i][1])
+            cf_history.append(all_dicts[i][2])
+
+        cur_ind = {}
+        if cur_row:
+            if cur_row.roe is not None:
+                cur_ind["roe"] = cur_row.roe
+            if cur_row.roa is not None:
+                cur_ind["roa"] = cur_row.roa
+            if cur_row.gross_margin is not None:
+                cur_ind["gross_margin"] = cur_row.gross_margin
+            if cur_row.net_margin is not None:
+                cur_ind["net_margin"] = cur_row.net_margin
+            if cur_row.debt_ratio is not None:
+                cur_ind["debt_ratio"] = cur_row.debt_ratio
+            if cur_row.current_ratio is not None:
+                cur_ind["current_ratio"] = cur_row.current_ratio
+            if cur_row.quick_ratio is not None:
+                cur_ind["quick_ratio"] = cur_row.quick_ratio
+            if cur_row.revenue_yoy is not None:
+                cur_ind["revenue_yoy"] = cur_row.revenue_yoy
+            if cur_row.net_profit_yoy is not None:
+                cur_ind["net_profit_yoy"] = cur_row.net_profit_yoy
+            if cur_row.eps is not None:
+                cur_ind["eps"] = cur_row.eps
+            if cur_row.bps is not None:
+                cur_ind["bps"] = cur_row.bps
+
         for key in ["operating_profit", "investment_income", "other_income",
                     "gross_margin", "financial_expenses",
                     "selling_expenses", "admin_expenses", "rd_expenses"]:
             if key in cur_inc and key not in cur_ind:
                 cur_ind[key] = cur_inc[key]
-        # 从 bs 补充
+
         for key in ["goodwill", "other_receivables", "total_equity"]:
             if key in cur_bs and key not in cur_ind:
                 cur_ind[key] = cur_bs[key]
+
+        try:
+            from app.models import FinMainIndicator
+            ind_rows = (
+                self.session.query(FinMainIndicator)
+                .filter(
+                    FinMainIndicator.stock_code == stock_code,
+                    FinMainIndicator.report_date <= report_date,
+                    FinMainIndicator.report_date >= start_date,
+                )
+                .order_by(FinMainIndicator.report_date.desc())
+                .all()
+            )
+            for ind_row in ind_rows:
+                if ind_row.report_date == report_date and ind_row.raw_json:
+                    raw = ind_row.raw_json
+                    for k in ["INVENTORY_TURN", "INV_TURN", "INVENTORY_TURNOVER"]:
+                        if k in raw and raw[k] is not None:
+                            try:
+                                cur_ind["inventory_turnover"] = Decimal(str(raw[k]))
+                            except (ValueError, TypeError):
+                                pass
+                            break
+                    for k in ["AR_TURN", "RECEIVABLE_TURN", "AR_TURNOVER", "ACCOUNTS_RECE_TURN"]:
+                        if k in raw and raw[k] is not None and "receivable_turnover" not in cur_ind:
+                            try:
+                                cur_ind["receivable_turnover"] = Decimal(str(raw[k]))
+                            except (ValueError, TypeError):
+                                pass
+                            break
+                    for k in ["ASSETS_TURN", "TOTAL_ASSET_TURN", "TOTAL_ASSETS_TURNOVER", "TAT"]:
+                        if k in raw and raw[k] is not None and "total_asset_turnover" not in cur_ind:
+                            try:
+                                cur_ind["total_asset_turnover"] = Decimal(str(raw[k]))
+                            except (ValueError, TypeError):
+                                pass
+                            break
+        except Exception:
+            pass
 
         return FinancialContext(
             stock_code=stock_code,
             report_date=report_date,
             bs=cur_bs, inc=cur_inc, cf=cur_cf, ind=cur_ind,
-            bs_history=_hist(bs_rows),
-            inc_history=_hist(inc_rows),
-            cf_history=_hist(cf_rows),
-            ind_history=_hist(ind_rows),
+            bs_history=bs_history,
+            inc_history=inc_history,
+            cf_history=cf_history,
+            ind_history=[],
         )
 
     def evaluate(self, stock_code: str, report_date: date, industry: str | None = None) -> RiskReport:

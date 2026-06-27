@@ -185,7 +185,14 @@ class Rule0_1(BaseRule):
         result = ctx.audit_result or ""
         detail = f"审计意见: {result}"
 
-        if "保留" in result or "无法表示" in result or "否定" in result:
+        non_standard = any(kw in result for kw in [
+            "保留意见", "无法表示意见", "否定意见",
+            "带强调事项段的无保留", "带强调事项段",
+        ])
+        standard_kw = ["标准无保留", "标准的无保留"]
+        is_standard = any(kw in result for kw in standard_kw)
+
+        if non_standard and not is_standard:
             verdict = Verdict.FAIL
             score = 999
             detail += " → 非标准意见，一票否决"
