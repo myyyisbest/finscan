@@ -313,6 +313,7 @@ import {
   CalendarOutlined, PieChartOutlined, SearchOutlined,
 } from '@ant-design/icons-vue'
 import { watchlistApi } from '@/api/finance'
+import { sampleStocks, analyzeLocal, searchStocks } from '@/engine/localData'
 
 interface SearchResult {
   code: string
@@ -498,7 +499,13 @@ function toggleFilter(filter: string) {
   }
 }
 
+const isCapacitor = (window as any).Capacitor !== undefined
+
 async function onSearch(value: string) {
+  if (isCapacitor) {
+    searchResults.value = searchStocks(value)
+    return
+  }
   if (!value || value.length < 1) {
     searchResults.value = []
     return
@@ -519,6 +526,13 @@ async function onSearch(value: string) {
 
 async function loadWatchlistStocks() {
   if (watchlistStocks.value.length > 0) return
+  if (isCapacitor) {
+    watchlistStocks.value = sampleStocks.map(s => ({
+      code: s.code,
+      name: s.name,
+    }))
+    return
+  }
   try {
     const res = await watchlistApi.list()
     if (res.code === 0) {
@@ -551,14 +565,27 @@ async function analyze() {
   }, 800)
 
   try {
-    const res = await fetch(`/api/v1/finscan/${selectedCode.value}/analyze`)
-    const data = await res.json()
-    if (data.code === 0) {
-      report.value = data.data
+    if (isCapacitor) {
+      const stock = sampleStocks.find(s => s.code === selectedCode.value)
+      if (!stock) {
+        message.error('未找到股票数据')
+        return
+      }
+      await new Promise(r => setTimeout(r, 1500))
+      const result = analyzeLocal(stock)
+      report.value = result as any
       loadStep.value = 3
       message.success('排雷分析完成')
     } else {
-      message.error(data.message || '分析失败')
+      const res = await fetch(`/api/v1/finscan/${selectedCode.value}/analyze`)
+      const data = await res.json()
+      if (data.code === 0) {
+        report.value = data.data
+        loadStep.value = 3
+        message.success('排雷分析完成')
+      } else {
+        message.error(data.message || '分析失败')
+      }
     }
   } catch (e: any) {
     message.error(e?.message || '网络错误')

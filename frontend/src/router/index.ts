@@ -97,6 +97,15 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
+  const isCapacitor = (window as any).Capacitor !== undefined
+  
+  // 手机版（Capacitor）本地模式：免登录，直接进入
+  if (isCapacitor) {
+    next()
+    return
+  }
+  
+  // 网页版保留登录逻辑
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
   if (requiresAuth && !authStore.token) {
     next('/login')
