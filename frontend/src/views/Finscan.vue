@@ -23,8 +23,39 @@
       </div>
     </div>
 
-    <a-spin :spinning="analyzing">
-      <div v-if="report" class="report-content">
+    <div v-if="analyzing" class="loading-state">
+      <div class="loading-content">
+        <div class="loading-animation">
+          <div class="loading-circle">
+            <span class="loading-icon">🔍</span>
+          </div>
+          <div class="loading-ring ring-1"></div>
+          <div class="loading-ring ring-2"></div>
+          <div class="loading-ring ring-3"></div>
+        </div>
+        <div class="loading-text">正在进行财报排雷分析</div>
+        <div class="loading-subtext">
+          <span class="loading-dot"></span>
+          解析财务数据中
+        </div>
+        <div class="loading-skeleton">
+          <div class="skeleton-gauge"></div>
+          <div class="skeleton-stats">
+            <div class="skeleton-stat"></div>
+            <div class="skeleton-stat"></div>
+            <div class="skeleton-stat"></div>
+            <div class="skeleton-stat"></div>
+          </div>
+          <div class="skeleton-rules">
+            <div class="skeleton-rule"></div>
+            <div class="skeleton-rule"></div>
+            <div class="skeleton-rule"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="report" class="report-content">
         <div class="stock-info-bar">
           <span class="stock-name">{{ report.stock_name }}</span>
           <span class="stock-code">{{ report.stock_code }}</span>
@@ -180,12 +211,11 @@
         </a-card>
       </div>
 
-      <div v-else-if="!analyzing && !selectedCode" class="empty-state">
+      <div v-else-if="!selectedCode" class="empty-state">
         <div class="empty-icon">🔍</div>
         <div class="empty-text">输入股票代码，开始排雷分析</div>
         <div class="empty-desc">基于《手把手教你读财报》30条排雷规则</div>
       </div>
-    </a-spin>
   </div>
 </template>
 
@@ -486,6 +516,177 @@ export default {}
 </script>
 
 <style scoped>
+.loading-state {
+  width: 100%;
+  padding: 60px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 500px;
+}
+
+.loading-content {
+  text-align: center;
+  width: 100%;
+  max-width: 480px;
+}
+
+.loading-animation {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 24px;
+}
+
+.loading-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+  z-index: 2;
+}
+
+.loading-icon {
+  font-size: 36px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.loading-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid transparent;
+  animation: ring-spin 2s linear infinite;
+}
+
+.ring-1 {
+  width: 100px;
+  height: 100px;
+  border-top-color: #3b82f6;
+  animation-duration: 1.2s;
+}
+
+.ring-2 {
+  width: 115px;
+  height: 115px;
+  border-top-color: #8b5cf6;
+  animation-duration: 1.8s;
+  animation-direction: reverse;
+}
+
+.ring-3 {
+  width: 130px;
+  height: 130px;
+  border-top-color: #a78bfa;
+  animation-duration: 2.4s;
+}
+
+@keyframes ring-spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.loading-subtext {
+  font-size: 14px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: blink 1.4s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.loading-skeleton {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+
+.skeleton-gauge {
+  width: 100%;
+  height: 80px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer-skeleton 1.5s infinite;
+  margin-bottom: 16px;
+}
+
+.skeleton-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.skeleton-stat {
+  height: 60px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer-skeleton 1.5s infinite;
+}
+
+.skeleton-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-rule {
+  height: 48px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer-skeleton 1.5s infinite;
+}
+
+.skeleton-stat:nth-child(1), .skeleton-rule:nth-child(1) { animation-delay: 0s; }
+.skeleton-stat:nth-child(2), .skeleton-rule:nth-child(2) { animation-delay: 0.2s; }
+.skeleton-stat:nth-child(3), .skeleton-rule:nth-child(3) { animation-delay: 0.4s; }
+.skeleton-stat:nth-child(4) { animation-delay: 0.6s; }
+
+@keyframes shimmer-skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .finscan-page {
   width: 100%;
   padding: 24px;
