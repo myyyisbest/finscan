@@ -71,10 +71,14 @@ def get_main_indicators(
 
     # 获取主要指标
     ind_query = db.query(FinMainIndicator).filter(FinMainIndicator.stock_code == code)
+    if view == "annual":
+        ind_query = ind_query.filter(FinMainIndicator.report_type == "Annual")
     indicators = ind_query.order_by(FinMainIndicator.report_date.desc()).limit(quarters).all()
 
     # 获取财务报表数据（用于提取关键指标和资产负债表数据）
     bs_query = db.query(FinReport).filter(FinReport.stock_code == code)
+    if view == "annual":
+        bs_query = bs_query.filter(FinReport.report_type == "Annual")
     fin_reports = bs_query.order_by(FinReport.report_date.desc()).limit(quarters).all()
     bs_map = {str(r.report_date): r for r in fin_reports}
 
