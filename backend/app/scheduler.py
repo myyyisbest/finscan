@@ -87,8 +87,11 @@ def _calc_industry_medians():
         for industry in industries:
             if not industry:
                 continue
-            from app.api.compare import calc_industry_median
-            calc_industry_median(industry=industry, report_type="Annual")
+            try:
+                from app.api.compare import calc_industry_median
+                calc_industry_median(industry=industry, report_type="Annual")
+            except (ImportError, AttributeError):
+                pass
         log.info("[Scheduler] 行业中位值计算完成: %d 个行业", len(industries))
     except Exception as exc:  # noqa: BLE001
         log.error("[Scheduler] 行业中位值异常: %s", exc)

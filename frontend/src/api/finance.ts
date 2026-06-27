@@ -106,7 +106,15 @@ export const stockApi = {
           list_date: string | null
         }
         profile: Record<string, string> | null
-        error: string | null
+        profile_error: string | null
+        announcements: Array<{
+          title: string
+          date: string
+          time: string
+          sec_name: string
+          url: string
+        }>
+        announce_error: string | null
       }
     }>(`/api/v1/stock/${code}/profile`),
 
@@ -181,4 +189,15 @@ export const collectorApi = {
   triggerCollect: (scope: 'watchlist' | 'single' = 'watchlist', stock_code?: string) =>
     api.post<{ code: number; data: any }>('/api/v1/collector/trigger', { scope, stock_code }),
   getStatus: (code: string) => api.get<{ code: number; data: any }>(`/api/v1/collector/status/${code}`),
+}
+
+export const compareApi = {
+  getReport: (stockCodes: string[], reportDate: string) =>
+    api.get<{ code: number; data: { report_date: string; data: any[] } }>(
+      `/api/v1/compare/report?stock_codes=${encodeURIComponent(stockCodes.join(','))}&report_date=${reportDate}`
+    ),
+  getReportDates: (stockCodes: string[], limit = 20) =>
+    api.get<{ code: number; data: ReportDate[] }>(
+      `/api/v1/compare/report-dates?stock_codes=${encodeURIComponent(stockCodes.join(','))}&limit=${limit}`
+    ),
 }

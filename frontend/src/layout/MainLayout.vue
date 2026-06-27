@@ -51,17 +51,21 @@
             <span class="nav-icon">📊</span>
             <span class="nav-text">我的自选</span>
           </router-link>
-          <router-link to="/finscan" class="nav-item" :class="{ active: route.path === '/finscan' }">
-            <span class="nav-icon">⚠️</span>
-            <span class="nav-text">财报排雷</span>
+          <router-link to="/analysis" class="nav-item" :class="{ active: route.path.startsWith('/analysis') || route.path.startsWith('/stock/') }">
+            <span class="nav-icon">📈</span>
+            <span class="nav-text">财报分析</span>
           </router-link>
           <router-link to="/compare" class="nav-item" :class="{ active: route.path === '/compare' }">
             <span class="nav-icon">📋</span>
             <span class="nav-text">多标对比</span>
           </router-link>
-          <router-link to="/analysis" class="nav-item" :class="{ active: route.path.startsWith('/analysis') || route.path.startsWith('/stock/') }">
-            <span class="nav-icon">📈</span>
-            <span class="nav-text">财报分析</span>
+          <router-link to="/finscan" class="nav-item" :class="{ active: route.path === '/finscan' }">
+            <span class="nav-icon">⚠️</span>
+            <span class="nav-text">财报排雷</span>
+          </router-link>
+          <router-link to="/announcements" class="nav-item" :class="{ active: route.path === '/announcements' }">
+            <span class="nav-icon">📢</span>
+            <span class="nav-text">公告中心</span>
           </router-link>
         </nav>
       </aside>

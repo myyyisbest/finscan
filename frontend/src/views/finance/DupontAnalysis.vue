@@ -430,10 +430,10 @@ watch(() => props.stockCode, (val) => {
 
 .dupont-tree {
   position: relative;
-  border: 1px solid #f0f0f0;
-  border-radius: 6px;
-  padding: 20px 12px;
-  background: #fafcff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 24px 12px;
+  background: linear-gradient(180deg, #f0f7ff 0%, #fafcff 100%);
   overflow-x: auto;
 }
 
@@ -454,32 +454,33 @@ watch(() => props.stockCode, (val) => {
 .node-card {
   display: inline-block;
   background: #fff;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
   padding: 10px 16px;
   min-width: 130px;
   text-align: center;
   transition: all 0.2s;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .node-card:hover {
-  border-color: #1d4ed8;
-  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.15);
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
   transform: translateY(-1px);
 }
 
 .node-card.active {
-  border-color: #1d4ed8;
-  background: #e6f0ff;
-  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.2);
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .node-card-root {
-  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
   color: #fff;
-  border-color: #1d4ed8;
+  border-color: #1e40af;
   min-width: 180px;
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
 }
 .node-card-root .node-label,
 .node-card-root .node-value,
@@ -487,22 +488,28 @@ watch(() => props.stockCode, (val) => {
 .node-card-root .expand-hint { color: #fff; }
 
 .node-card-l1 {
-  background: #f0f7ff;
-  border-color: #91caff;
+  background: #fff;
+  border: 2px solid #93c5fd;
   min-width: 150px;
 }
+.node-card-l1 .node-label { color: #1e40af; }
+.node-card-l1 .node-value { color: #2563eb; }
 
 .node-card-l2 {
   background: #fff;
-  border-color: #d9d9d9;
+  border: 1px solid #e5e7eb;
   min-width: 130px;
 }
+.node-card-l2 .node-label { color: #6b7280; }
+.node-card-l2 .node-value { color: #374151; }
 
 .node-card-asset {
-  background: #fff7e6;
-  border-color: #ffd591;
+  background: #fffbeb;
+  border: 2px solid #fcd34d;
   min-width: 130px;
 }
+.node-card-asset .node-label { color: #92400e; }
+.node-card-asset .node-value { color: #d97706; }
 
 .node-label {
   font-size: 12px;
@@ -651,9 +658,11 @@ watch(() => props.stockCode, (val) => {
   align-items: flex-end;
   justify-content: space-between;
   gap: 6px;
-  height: 160px;
+  height: 180px;
   padding: 8px 4px 4px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafafa;
+  border-radius: 6px;
 }
 
 .bar-item {
@@ -667,30 +676,34 @@ watch(() => props.stockCode, (val) => {
 
 .bar-wrapper {
   width: 100%;
-  height: 120px;
+  height: 140px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  position: relative;
 }
 
 .bar-fill {
   width: 70%;
   min-height: 4px;
-  border-radius: 3px 3px 0 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 4px;
-  color: #fff;
-  font-size: 10px;
+  border-radius: 4px 4px 0 0;
   transition: all 0.3s;
-  background: #1d4ed8;
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  position: relative;
 }
 
 .bar-value {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
   white-space: nowrap;
-  text-shadow: 0 0 2px rgba(0,0,0,0.3);
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
+  color: #374151;
+  background: rgba(255,255,255,0.9);
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 
 .bar-label {

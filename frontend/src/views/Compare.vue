@@ -10,25 +10,29 @@
             style="width: 200px"
             @change="onGroupChange"
             placeholder="请选择分组"
+            :disabled="!groups.length"
           >
-            <a-select-option :value="0">全部公司</a-select-option>
             <a-select-option v-for="g in groups" :key="g.id" :value="g.id">
-              {{ g.name }}
+              {{ g.name }} ({{ g.stock_count || 0 }})
             </a-select-option>
           </a-select>
         </div>
         <div class="filter-item">
-          <span class="filter-label">报告期间</span>
-          <a-select v-model:value="reportType" style="width: 160px" @change="loadCompareData">
-            <a-select-option value="Annual">年报</a-select-option>
-            <a-select-option value="Q3">三季报</a-select-option>
-            <a-select-option value="H1">半年报</a-select-option>
-            <a-select-option value="Q1">一季报</a-select-option>
+          <span class="filter-label">报告期</span>
+          <a-select
+            v-model:value="selectedReportDate"
+            style="width: 180px"
+            @change="loadCompareData"
+            :disabled="!reportDates.length"
+          >
+            <a-select-option v-for="r in reportDates" :key="r.report_date" :value="r.report_date">
+              {{ r.report_name }}
+            </a-select-option>
           </a-select>
         </div>
       </div>
 
-      <!-- 四个对比分类按钮 -->
+      <!-- 三个对比分类按钮 -->
       <div class="compare-tabs">
         <button
           v-for="tab in compareTabs"
@@ -57,7 +61,7 @@
       <!-- 对比表格 -->
       <a-card v-if="compareData.length > 0" class="table-card fade-in">
         <template #title>
-          <span>详细指标对比</span>
+          <span>详细指标对比 · {{ currentReportName }}</span>
         </template>
         <a-table
           :columns="tableColumns"
@@ -84,7 +88,7 @@
 
       <a-empty v-if="!loading && compareData.length === 0" description="暂无对比数据">
         <template #description>
-          <span>请选择分组并确保股票已采集财务数据</span>
+          <span>{{ emptyTip }}</span>
         </template>
       </a-empty>
     </a-spin>
@@ -92,21 +96,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
-  RiseOutlined, SwapOutlined, AppstoreOutlined, BarChartOutlined
+  RiseOutlined, SwapOutlined, AppstoreOutlined
 } from '@ant-design/icons-vue'
-import { watchlistApi } from '@/api/finance'
+import { watchlistApi, compareApi } from '@/api/finance'
 import type { WatchlistItem } from '@/api/finance'
 
 const router = useRouter()
 
 const loading = ref(false)
 const groups = ref<{ id: number; name: string; stock_count: number }[]>([])
-const selectedGroupId = ref<number>(0)
-const reportType = ref('Annual')
+const selectedGroupId = ref<number | null>(null)
+const selectedReportDate = ref('')
+const reportDates = ref<{ report_date: string; report_name: string; report_type: string }[]>([])
 const compareType = ref('profitability')
 
 const watchlist = ref<WatchlistItem[]>([])
@@ -118,7 +123,6 @@ const compareTabs = [
   { key: 'profitability', label: '盈利能力', icon: RiseOutlined },
   { key: 'efficiency', label: '运营效率', icon: SwapOutlined },
   { key: 'structure', label: '资本结构', icon: AppstoreOutlined },
-  { key: 'scale', label: '规模对比', icon: BarChartOutlined },
 ]
 
 const metricConfig: Record<string, { key: string; label: string; unit?: string }[]> = {
@@ -136,15 +140,21 @@ const metricConfig: Record<string, { key: string; label: string; unit?: string }
     { key: 'current_ratio', label: '流动比率' },
     { key: 'quick_ratio', label: '速动比率' },
   ],
-  scale: [
-    { key: 'total_revenue', label: '营业总收入', unit: '亿' },
-    { key: 'net_profit_parent', label: '归母净利润', unit: '亿' },
-    { key: 'total_assets', label: '总资产', unit: '亿' },
-    { key: 'total_equity', label: '所有者权益', unit: '亿' },
-  ],
 }
 
 const currentMetrics = computed(() => metricConfig[compareType.value])
+
+const currentReportName = computed(() => {
+  const r = reportDates.value.find(x => x.report_date === selectedReportDate.value)
+  return r?.report_name || ''
+})
+
+const emptyTip = computed(() => {
+  if (!groups.value.length) return '请先在"我的自选"中创建分组'
+  if (!selectedGroupId.value) return '请选择一个分组开始对比'
+  if (!reportDates.value.length) return '该分组暂无财务数据，请先采集'
+  return '暂无对比数据'
+})
 
 const tableColumns = computed(() => {
   const metrics = currentMetrics.value
@@ -166,7 +176,9 @@ function setChartRef(key: string, el: any) {
 }
 
 function onGroupChange() {
-  loadWatchlist()
+  if (selectedGroupId.value) {
+    loadWatchlist()
+  }
 }
 
 async function loadGroups() {
@@ -174,6 +186,11 @@ async function loadGroups() {
     const res = await watchlistApi.listGroups()
     if (res.code === 0) {
       groups.value = res.data || []
+      // 默认选第一个分组
+      if (groups.value.length > 0 && !selectedGroupId.value) {
+        selectedGroupId.value = groups.value[0].id
+        await loadWatchlist()
+      }
     }
   } catch (e) {
     console.error(e)
@@ -181,13 +198,35 @@ async function loadGroups() {
 }
 
 async function loadWatchlist() {
+  if (!selectedGroupId.value) return
   try {
-    const res = await watchlistApi.list(
-      selectedGroupId.value === 0 ? undefined : selectedGroupId.value
-    )
+    const res = await watchlistApi.list(selectedGroupId.value)
     if (res.code === 0) {
       watchlist.value = res.data || []
-      await loadCompareData()
+      await loadReportDates()
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function loadReportDates() {
+  if (watchlist.value.length === 0) {
+    reportDates.value = []
+    compareData.value = []
+    return
+  }
+  const codes = watchlist.value.map(w => w.stock_code)
+  try {
+    const res = await compareApi.getReportDates(codes, 20)
+    if (res.code === 0) {
+      reportDates.value = res.data || []
+      if (reportDates.value.length > 0) {
+        // 默认选最新年报
+        const annual = reportDates.value.find(r => r.report_type === 'Annual')
+        selectedReportDate.value = annual?.report_date || reportDates.value[0].report_date
+        await loadCompareData()
+      }
     }
   } catch (e) {
     console.error(e)
@@ -195,35 +234,19 @@ async function loadWatchlist() {
 }
 
 async function loadCompareData() {
-  if (watchlist.value.length === 0) {
+  if (watchlist.value.length === 0 || !selectedReportDate.value) {
     compareData.value = []
     return
   }
 
   loading.value = true
   try {
-    // 从最新报告数据中提取指标
-    const data = watchlist.value.map(item => {
-      const report = item.latest_report
-      return {
-        stock_code: item.stock_code,
-        stock_name: item.stock_name,
-        total_revenue: report?.total_revenue,
-        net_profit_parent: report?.net_profit_parent,
-        total_assets: report?.total_assets,
-        total_equity: report?.total_equity,
-        roe: report?.roe,
-        roa: report?.roa,
-        gross_margin: report?.gross_margin,
-        net_margin: report?.net_margin,
-        debt_to_assets: report?.debt_ratio,
-        current_ratio: report?.current_ratio,
-        quick_ratio: report?.quick_ratio,
-        total_asset_turnover: report?.total_asset_turnover,
-      }
-    })
-    compareData.value = data
-    nextTick(() => initCharts())
+    const codes = watchlist.value.map(w => w.stock_code)
+    const res = await compareApi.getReport(codes, selectedReportDate.value)
+    if (res.code === 0) {
+      compareData.value = res.data?.data || []
+      nextTick(() => initCharts())
+    }
   } catch (e) {
     console.error('Failed to load compare data:', e)
   } finally {
@@ -334,7 +357,6 @@ const handleResize = () => {
 
 onMounted(async () => {
   await loadGroups()
-  await loadWatchlist()
   window.addEventListener('resize', handleResize)
 })
 
@@ -362,6 +384,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 24px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .filter-item {
@@ -377,7 +400,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/* 四个对比分类按钮 */
+/* 对比分类按钮 */
 .compare-tabs {
   display: flex;
   gap: 0;

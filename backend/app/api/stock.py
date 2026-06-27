@@ -221,17 +221,19 @@ def get_stock_profile(code: str, db: Session = Depends(get_db)):
         "list_date": str(stock.list_date) if stock and stock.list_date else None,
     }
 
-    # 1) 雪球公司简介
+    # 1) 巨潮公司概况（真实可用）
     profile_data = None
     profile_error = None
     try:
         import akshare as ak
-        df = ak.stock_individual_basic_info_xq(symbol=xq_symbol)
+        df = ak.stock_profile_cninfo(symbol=code_clean)
         if df is not None and len(df) > 0:
-            profile_data = dict(zip(df.iloc[:, 0].tolist(), df.iloc[:, 1].tolist()))
+            # 转为字典，键名为中文
+            row = df.iloc[0]
+            profile_data = {col: str(row[col]) if row[col] is not None else '' for col in df.columns}
     except Exception as e:
         profile_error = str(e)
-        log.warning("akshare stock_individual_basic_info_xq 失败: %s", e)
+        log.warning("akshare stock_profile_cninfo 失败: %s", e)
 
     # 2) 巨潮公告（最近90天）
     announcements = []
