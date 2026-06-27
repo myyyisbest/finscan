@@ -55,17 +55,26 @@ def _build_rule_context(db: Session, stock_code: str, report_year: int) -> RuleC
     cashflow_list = []
     indicator_list = []
 
-    for r in reports:
+    for i, r in enumerate(reports):
         income_json = r.income_json or {}
         balance_json = r.balance_json or {}
         cashflow_json = r.cashflow_json or {}
 
+        revenue = income_json.get("TOTAL_OPERATE_INCOME") or income_json.get("OPERATE_INCOME")
+        oper_cost = income_json.get("OPERATE_COST") or income_json.get("TOTAL_OPERATE_COST")
+        gross_profit = None
+        if revenue is not None and oper_cost is not None:
+            try:
+                gross_profit = float(revenue) - float(oper_cost)
+            except (TypeError, ValueError):
+                pass
+
         income_list.append({
             "end_date": str(r.report_date),
-            "revenue": income_json.get("TOTAL_OPERATE_INCOME") or income_json.get("OPERATE_INCOME"),
+            "revenue": revenue,
             "revenue_yoy": income_json.get("TOTAL_OPERATE_INCOME_YOY") or income_json.get("OPERATE_INCOME_YOY"),
-            "oper_cost": income_json.get("OPERATE_COST") or income_json.get("TOTAL_OPERATE_COST"),
-            "gross_profit": None,
+            "oper_cost": oper_cost,
+            "gross_profit": gross_profit,
             "sell_exp": income_json.get("SALE_EXPENSE"),
             "admin_exp": income_json.get("MANAGE_EXPENSE"),
             "rd_exp": income_json.get("RESEARCH_EXPENSE"),
@@ -105,15 +114,47 @@ def _build_rule_context(db: Session, stock_code: str, report_year: int) -> RuleC
             "total_current_liab": balance_json.get("TOTAL_CURRENT_LIAB"),
         })
 
+        oper_cf = cashflow_json.get("NETCASH_OPERATE")
+        invest_cf = cashflow_json.get("NETCASH_INVEST")
+        construct_long = cashflow_json.get("CONSTRUCT_LONG_ASSET")
+        free_cashflow = None
+        try:
+            if oper_cf is not None and construct_long is not None:
+                free_cashflow = float(oper_cf) + float(construct_long)
+            elif oper_cf is not None and invest_cf is not None:
+                free_cashflow = float(oper_cf) + float(invest_cf)
+        except (TypeError, ValueError):
+            pass
+
         cashflow_list.append({
             "end_date": str(r.report_date),
-            "n_cashflow_act": cashflow_json.get("NETCASH_OPERATE"),
-            "n_cashflow_inv_act": cashflow_json.get("NETCASH_INVEST"),
+            "n_cashflow_act": oper_cf,
+            "n_cashflow_inv_act": invest_cf,
             "n_cash_flows_fnc_act": cashflow_json.get("NETCASH_FINANCE"),
             "c_recp_prov_sg_act": cashflow_json.get("SALES_SERVICES"),
-            "c_pay_acq_const_fiolta": cashflow_json.get("CONSTRUCT_LONG_ASSET"),
-            "free_cashflow": None,
+            "c_pay_acq_const_fiolta": construct_long,
+            "free_cashflow": free_cashflow,
         })
+
+        inv_turn = None
+        ar_turn = None
+        try:
+            inv_cur = float(balance_json.get("INVENTORY") or 0)
+            inv_prev = float(reports[i + 1].balance_json.get("INVENTORY") or 0) if i + 1 < len(reports) else inv_cur
+            avg_inv = (inv_cur + inv_prev) / 2 if inv_cur and inv_prev else inv_cur or inv_prev
+            if avg_inv > 0 and oper_cost is not None:
+                inv_turn = float(oper_cost) / avg_inv
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+
+        try:
+            ar_cur = float(balance_json.get("ACCOUNTS_RECE") or balance_json.get("NOTE_ACCOUNTS_RECE") or 0)
+            ar_prev = float(reports[i + 1].balance_json.get("ACCOUNTS_RECE") or reports[i + 1].balance_json.get("NOTE_ACCOUNTS_RECE") or 0) if i + 1 < len(reports) else ar_cur
+            avg_ar = (ar_cur + ar_prev) / 2 if ar_cur and ar_prev else ar_cur or ar_prev
+            if avg_ar > 0 and revenue is not None:
+                ar_turn = float(revenue) / avg_ar
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
 
         indicator_list.append({
             "end_date": str(r.report_date),
@@ -126,8 +167,8 @@ def _build_rule_context(db: Session, stock_code: str, report_year: int) -> RuleC
             "debt_to_assets": r.debt_ratio,
             "current_ratio": r.current_ratio,
             "quick_ratio": r.quick_ratio,
-            "inv_turn": None,
-            "ar_turn": None,
+            "inv_turn": inv_turn,
+            "ar_turn": ar_turn,
             "assets_turn": None,
         })
 

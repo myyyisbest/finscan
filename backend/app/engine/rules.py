@@ -911,7 +911,7 @@ class Rule3_4(BaseRule):
 
 
 class Rule3_5(BaseRule):
-    """坏账计提比例低于同行"""
+    """坏账计提比例低于同行/历史"""
     code = "3.5"
     name = "坏账计提不足"
     layer = 3
@@ -947,15 +947,41 @@ class Rule3_5(BaseRule):
             elif bad_debt_ratio < peer_ratio:
                 verdict = Verdict.WARN
                 score = self.weight_warn
-                detail += " → WARN"
+                detail += " → WARN: 低于同行"
             else:
                 verdict = Verdict.PASS
                 score = 0
                 detail += " → PASS"
         else:
-            verdict = Verdict.SKIP
-            score = 0
-            detail += " → SKIP: 同行数据不足"
+            hist_ratios = []
+            for i in range(1, min(4, len(ctx.income_list))):
+                if i < len(ctx.income_list) and i < len(ctx.balance_list):
+                    inc = ctx.income_list[i]
+                    bal = ctx.balance_list[i]
+                    cl = abs(float(inc.get("credit_impa_loss") or 0))
+                    ar_hist = float(bal.get("accounts_receiv") or 0)
+                    if ar_hist > 0:
+                        hist_ratios.append(cl / ar_hist * 100)
+
+            if hist_ratios:
+                avg_hist = sum(hist_ratios) / len(hist_ratios)
+                detail += f", 历史均值: {self.format_number(avg_hist, 2)}%"
+                if avg_hist > 0 and bad_debt_ratio < avg_hist * 0.5:
+                    verdict = Verdict.FAIL
+                    score = self.weight_fail
+                    detail += " → FAIL: 远低于历史均值"
+                elif bad_debt_ratio < avg_hist * 0.7:
+                    verdict = Verdict.WARN
+                    score = self.weight_warn
+                    detail += " → WARN: 低于历史均值"
+                else:
+                    verdict = Verdict.PASS
+                    score = 0
+                    detail += " → PASS"
+            else:
+                detail += " → PASS: 无对比基准"
+                verdict = Verdict.PASS
+                score = 0
 
         return RuleResult(code=self.code, name=self.name, layer=self.layer,
                          verdict=verdict, score_added=score, detail=detail,
