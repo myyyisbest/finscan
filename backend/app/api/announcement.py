@@ -1,4 +1,5 @@
 """公告信息 API - 从东方财富实时获取公告数据"""
+import logging
 from fastapi import APIRouter, Query, Depends
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -25,10 +26,31 @@ def list_announcements(
     """获取公告列表，从东方财富实时获取数据，支持按股票代码/名称和公告类型筛选"""
     try:
         today = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
 
-        # 使用东财全市场公告接口
-        df = ak.stock_notice_report(symbol="全部", date=today)
+        # 循环获取多天数据
+        all_data = []
+        for i in range(min(days, 30)):  # 最多30天
+            date = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
+            try:
+                df = ak.stock_notice_report(symbol="全部", date=date)
+                if df is not None and len(df) > 0:
+                    all_data.append(df)
+            except Exception as e:
+                logging.warning(f"获取 {date} 公告失败: {e}")
+                continue
+
+        if not all_data:
+            return success_response({
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+            })
+
+        # 合并所有数据
+        df = pd.concat(all_data, ignore_index=True)
+        # 去重
+        df = df.drop_duplicates(subset=['代码', '公告标题', '公告日期'], keep='first')
 
         if df is None or len(df) == 0:
             return success_response({
@@ -87,7 +109,6 @@ def list_announcements(
             "page_size": page_size,
         })
     except Exception as e:
-        import logging
         logging.error(f"获取公告列表失败: {e}")
         return success_response({
             "items": [],
