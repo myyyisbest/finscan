@@ -91,13 +91,15 @@
       title="添加自选股"
       @ok="confirmAdd"
       :confirm-loading="addLoading"
+      okText="添加"
+      cancelText="取消"
     >
       <a-input-search
         v-model:value="addKeyword"
-        placeholder="输入股票代码或名称"
+        placeholder="输入股票代码（如002130）或名称搜索"
         size="large"
         @search="searchToAdd"
-        @change="searchToAdd"
+        @change="onKeywordChange"
         style="margin-bottom: 12px"
       />
       <div v-if="addSearchResults.length > 0" class="add-results">
@@ -106,14 +108,24 @@
           :key="item.stock_code"
           class="add-result-item"
           :class="{ selected: selectedToAdd?.stock_code === item.stock_code }"
-          @click="selectedToAdd = item"
+          @click="selectStock(item)"
         >
           <span class="code">{{ item.stock_code }}</span>
           <span class="name">{{ item.stock_name }}</span>
           <span v-if="item.industry" class="industry">{{ item.industry }}</span>
         </div>
       </div>
-      <a-empty v-if="addKeyword && addSearchResults.length === 0 && !addSearching" description="未找到股票" />
+      <div v-else-if="isCodeInput" class="code-direct-add">
+        <div class="direct-add-tip">
+          <span class="code-badge">{{ addKeyword }}</span>
+          <span class="tip-text">未搜索到该股票，可直接通过代码添加</span>
+        </div>
+      </div>
+      <a-empty v-else-if="addKeyword && !addSearching" description="未找到股票，可输入6位股票代码直接添加" />
+      <div class="add-tip">
+        <a-tag color="blue">提示</a-tag>
+        支持直接输入6位股票代码添加，添加后点击"采集"按钮获取财务数据
+      </div>
     </a-modal>
 
     <div class="fab-btn" @click="addModalVisible = true" title="添加自选股">
@@ -123,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, ReloadOutlined, CloudDownloadOutlined } from '@ant-design/icons-vue'
@@ -141,6 +153,10 @@ const addSearching = ref(false)
 const addSearchResults = ref<SearchResult[]>([])
 const selectedToAdd = ref<SearchResult | null>(null)
 const addLoading = ref(false)
+
+const isCodeInput = computed(() => {
+  return /^\d{6}$/.test(addKeyword.value) && addSearchResults.value.length === 0 && !addSearching.value
+})
 
 const columns = [
   { title: '股票', key: 'stock_name', width: 180, fixed: 'left' as const },
@@ -246,34 +262,54 @@ async function collectStock(record: WatchlistItem) {
 }
 
 let addSearchTimer: number | null = null
+
+function onKeywordChange() {
+  selectedToAdd.value = null
+  if (addSearchTimer) clearTimeout(addSearchTimer)
+  addSearchTimer = window.setTimeout(() => {
+    searchToAdd()
+  }, 300)
+}
+
 async function searchToAdd() {
   if (!addKeyword.value) {
     addSearchResults.value = []
     return
   }
-  if (addSearchTimer) clearTimeout(addSearchTimer)
-  addSearchTimer = window.setTimeout(async () => {
-    addSearching.value = true
-    try {
-      const res = await stockApi.search(addKeyword.value)
-      if (res.code === 0) {
-        addSearchResults.value = res.data || []
-      }
-    } finally {
-      addSearching.value = false
+  addSearching.value = true
+  try {
+    const res = await stockApi.search(addKeyword.value)
+    if (res.code === 0) {
+      addSearchResults.value = res.data || []
     }
-  }, 300)
+  } finally {
+    addSearching.value = false
+  }
+}
+
+function selectStock(item: SearchResult) {
+  selectedToAdd.value = item
 }
 
 async function confirmAdd() {
-  if (!selectedToAdd.value) {
-    message.warning('请先选择股票')
+  let code = ''
+  let name = ''
+
+  if (selectedToAdd.value) {
+    code = selectedToAdd.value.stock_code
+    name = selectedToAdd.value.stock_name
+  } else if (/^\d{6}$/.test(addKeyword.value)) {
+    code = addKeyword.value
+    name = addKeyword.value
+  } else {
+    message.warning('请选择股票或输入6位股票代码')
     return
   }
+
   addLoading.value = true
   try {
-    await watchlistApi.add(selectedToAdd.value.stock_code, selectedToAdd.value.stock_name)
-    message.success('添加成功')
+    await watchlistApi.add(code, name)
+    message.success('添加成功，可点击"采集"按钮获取财务数据')
     addModalVisible.value = false
     addKeyword.value = ''
     selectedToAdd.value = null
@@ -427,5 +463,44 @@ onMounted(() => {
   gap: 4px;
   align-items: center;
   justify-content: center;
+}
+
+.code-direct-add {
+  padding: 20px;
+  text-align: center;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.direct-add-tip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.code-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #1d4ed8;
+  color: #fff;
+  border-radius: 4px;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.tip-text {
+  color: #666;
+  font-size: 14px;
+}
+
+.add-tip {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #f0f7ff;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
 }
 </style>

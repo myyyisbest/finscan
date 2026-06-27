@@ -55,10 +55,6 @@
             <span class="nav-icon">⚠️</span>
             <span class="nav-text">财报排雷</span>
           </router-link>
-          <router-link to="/announcements" class="nav-item" :class="{ active: route.path.startsWith('/announcements') }">
-            <span class="nav-icon">📰</span>
-            <span class="nav-text">公告中心</span>
-          </router-link>
           <router-link to="/compare" class="nav-item" :class="{ active: route.path === '/compare' }">
             <span class="nav-icon">📋</span>
             <span class="nav-text">多标对比</span>
