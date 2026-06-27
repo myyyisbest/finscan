@@ -130,6 +130,13 @@
               </span>
               <span v-else>-</span>
             </template>
+            <template v-else-if="column.key === 'net_profit_yoy'">
+              <span v-if="record.latest_report?.net_profit_yoy != null"
+                :class="getYoyClass(record.latest_report.net_profit_yoy)">
+                {{ record.latest_report.net_profit_yoy?.toFixed(2) }}%
+              </span>
+              <span v-else>-</span>
+            </template>
           </template>
         </a-table>
         <a-empty v-if="!loading && watchlist.length === 0" description="暂无自选股">
@@ -251,14 +258,15 @@ const avgDebtRatio = computed(() => {
 })
 
 const columns = [
-  { title: '分组', key: 'group_name', width: 90 },
-  { title: '股票', key: 'stock_name', width: 160, fixed: 'left' as const },
-  { title: '最新报告期', key: 'latest_report', width: 120 },
-  { title: '营业总收入(万)', key: 'total_revenue', width: 150, align: 'right' as const },
-  { title: '归母净利润(万)', key: 'net_profit_parent', width: 150, align: 'right' as const },
-  { title: 'ROE(%)', key: 'roe', width: 100, align: 'right' as const },
-  { title: '资产负债率(%)', key: 'debt_ratio', width: 120, align: 'right' as const },
-  { title: '营收同比(%)', key: 'revenue_yoy', width: 120, align: 'right' as const },
+  { title: '分组', key: 'group_name', width: 80 },
+  { title: '股票', key: 'stock_name', width: 130, fixed: 'left' as const },
+  { title: '最新年报期', key: 'latest_report', width: 100 },
+  { title: '营业总收入', key: 'total_revenue', width: 110, align: 'right' as const },
+  { title: '归母净利润', key: 'net_profit_parent', width: 110, align: 'right' as const },
+  { title: 'ROE', key: 'roe', width: 70, align: 'right' as const },
+  { title: '资产负债率', key: 'debt_ratio', width: 90, align: 'right' as const },
+  { title: '营收同比', key: 'revenue_yoy', width: 80, align: 'right' as const },
+  { title: '利润同比', key: 'net_profit_yoy', width: 80, align: 'right' as const },
   { title: '操作', key: 'action', width: 80, align: 'center' as const, fixed: 'right' as const },
 ]
 

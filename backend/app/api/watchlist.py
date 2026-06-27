@@ -211,15 +211,18 @@ def list_watchlist(
         roe = None
         debt_ratio = None
         revenue_yoy = None
+        net_profit_yoy = None
         if latest_ind and latest_ind.raw_json:
             raw = latest_ind.raw_json
             roe = _safe_float(raw.get("ROEJQ"))
             debt_ratio = _safe_float(raw.get("ZCFZL"))
             revenue_yoy = _safe_float(raw.get("TOTALOPERATEREVETZ"))
+            net_profit_yoy = _safe_float(raw.get("PARENTNETPROFITTZ"))
         elif latest:
             roe = float(latest.roe) if latest.roe is not None else None
             debt_ratio = float(latest.debt_ratio) if latest.debt_ratio is not None else None
             revenue_yoy = float(latest.revenue_yoy) if latest.revenue_yoy is not None else None
+            net_profit_yoy = float(latest.net_profit_yoy) if latest.net_profit_yoy is not None else None
 
         result.append({
             "stock_code": code,
@@ -241,6 +244,7 @@ def list_watchlist(
                 "roe": roe,
                 "debt_ratio": debt_ratio,
                 "revenue_yoy": revenue_yoy,
+                "net_profit_yoy": net_profit_yoy,
             } if latest or latest_ind else None,
         })
     return success_response(result)
