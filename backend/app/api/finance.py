@@ -73,17 +73,14 @@ def get_main_indicators(
     ind_query = db.query(FinMainIndicator).filter(FinMainIndicator.stock_code == code)
     indicators = ind_query.order_by(FinMainIndicator.report_date.desc()).limit(quarters).all()
 
-    # 获取资产负债表数据（用于总资产/总负债/股东权益）
+    # 获取财务报表数据（用于提取关键指标和资产负债表数据）
     bs_query = db.query(FinReport).filter(FinReport.stock_code == code)
     fin_reports = bs_query.order_by(FinReport.report_date.desc()).limit(quarters).all()
     bs_map = {str(r.report_date): r for r in fin_reports}
 
-    if not indicators:
-        return success_response({
-            "report_dates": [],
-            "report_names": [],
-            "sections": []
-        })
+    # 如果没有主要指标数据，从FinReport提取列构建
+    if not indicators and fin_reports:
+        return _build_main_indicators_from_reports(fin_reports, bs_map)
 
     # 从原始JSON提取数据
     def get_val(raw, key):
@@ -194,6 +191,144 @@ def get_main_indicators(
     return success_response(data)
 
 
+def _build_main_indicators_from_reports(fin_reports, bs_map):
+    """从FinReport提取列构建主要指标数据（当FinMainIndicator无数据时的降级方案）。"""
+    dates = [str(r.report_date) for r in fin_reports]
+    names = [r.report_name for r in fin_reports]
+
+    def col(field):
+        """从FinReport提取列字段"""
+        result = []
+        for r in fin_reports:
+            v = getattr(r, field, None)
+            if v is not None:
+                try:
+                    result.append(float(v))
+                except (ValueError, TypeError):
+                    result.append(None)
+            else:
+                result.append(None)
+        return result
+
+    def bs_col(key):
+        """从资产负债表JSON获取数据"""
+        result = []
+        for dt in dates:
+            r = bs_map.get(dt)
+            if r and r.balance_json:
+                v = r.balance_json.get(key)
+                if v is not None and not (isinstance(v, float) and v != v):
+                    try:
+                        result.append(float(v))
+                    except (ValueError, TypeError):
+                        result.append(None)
+                else:
+                    result.append(None)
+            else:
+                result.append(None)
+        return result
+
+    def inc_col(key):
+        """从利润表JSON获取数据"""
+        result = []
+        for r in fin_reports:
+            if r.income_json:
+                v = r.income_json.get(key)
+                if v is not None and not (isinstance(v, float) and v != v):
+                    try:
+                        result.append(float(v))
+                    except (ValueError, TypeError):
+                        result.append(None)
+                else:
+                    result.append(None)
+            else:
+                result.append(None)
+        return result
+
+    # 计算每股指标需要的总股本
+    share_capital_list = bs_col("SHARE_CAPITAL")
+
+    def calc_per_share(total_field):
+        """计算每股数据"""
+        result = []
+        for i, r in enumerate(fin_reports):
+            total_val = getattr(r, total_field, None)
+            sc = share_capital_list[i] if i < len(share_capital_list) else None
+            if total_val is not None and sc and sc > 0:
+                try:
+                    result.append(round(float(total_val) / sc, 4))
+                except (ValueError, TypeError, ZeroDivisionError):
+                    result.append(None)
+            else:
+                result.append(None)
+        return result
+
+    data = {
+        "report_dates": dates,
+        "report_names": names,
+        "sections": [
+            {
+                "name": "每股指标",
+                "items": [
+                    {"name": "基本每股收益(元)", "key": "EPSJB", "values": calc_per_share("net_profit_parent")},
+                    {"name": "每股净资产(元)", "key": "BPS", "values": calc_per_share("total_equity")},
+                    {"name": "每股经营现金流(元)", "key": "MGJYXJJE", "values": calc_per_share("operate_cash_net")},
+                ]
+            },
+            {
+                "name": "盈利能力",
+                "items": [
+                    {"name": "净资产收益率ROE(%)", "key": "ROEJQ", "values": col("roe")},
+                    {"name": "总资产收益率ROA(%)", "key": "ZZCJLL", "values": col("roa")},
+                    {"name": "销售毛利率(%)", "key": "XSMLL", "values": col("gross_margin")},
+                    {"name": "销售净利率(%)", "key": "XSJLL", "values": col("net_margin")},
+                ]
+            },
+            {
+                "name": "成长能力",
+                "items": [
+                    {"name": "营业总收入同比增长率(%)", "key": "TOTALOPERATEREVETZ", "values": col("revenue_yoy")},
+                    {"name": "归母净利润同比增长率(%)", "key": "PARENTNETPROFITTZ", "values": col("net_profit_yoy")},
+                    {"name": "总资产同比增长率(%)", "key": "TOTALASY", "values": col("assets_yoy")},
+                ]
+            },
+            {
+                "name": "偿债能力",
+                "items": [
+                    {"name": "资产负债率(%)", "key": "ZCFZL", "values": col("debt_ratio")},
+                    {"name": "流动比率", "key": "LD", "values": col("current_ratio")},
+                    {"name": "速动比率", "key": "SD", "values": col("quick_ratio")},
+                ]
+            },
+            {
+                "name": "利润表关键科目",
+                "items": [
+                    {"name": "营业总收入", "key": "TOTALOPERATEREVE", "values": col("total_revenue")},
+                    {"name": "营业利润", "key": "OPERATEPROFIT", "values": col("operate_profit")},
+                    {"name": "利润总额", "key": "TOTALPROFIT", "values": col("total_profit")},
+                    {"name": "归母净利润", "key": "PARENTNETPROFIT", "values": col("net_profit_parent")},
+                    {"name": "扣非净利润", "key": "KCFJCXSYJLR", "values": col("deduct_net_profit")},
+                ]
+            },
+            {
+                "name": "资产负债关键科目",
+                "items": [
+                    {"name": "总资产", "key": "TOTAL_ASSETS", "values": col("total_assets")},
+                    {"name": "总负债", "key": "TOTAL_LIABILITIES", "values": col("total_liabilities")},
+                    {"name": "股东权益合计", "key": "TOTAL_EQUITY", "values": col("total_equity")},
+                ]
+            },
+            {
+                "name": "现金流量关键科目",
+                "items": [
+                    {"name": "经营活动现金流净额", "key": "OPERATECASHNET", "values": col("operate_cash_net")},
+                ]
+            },
+        ]
+    }
+    return success_response(data)
+
+
 def _calc_cash_ps(r: FinReport):
     if r.operate_cash_net is None:
         return None
@@ -207,9 +342,6 @@ def _calc_cash_ps(r: FinReport):
         except (ValueError, TypeError):
             pass
     return None
-
-
-# ===================== 资产负债表 =====================
 
 BS_GROUPS = [
     {

@@ -29,9 +29,14 @@
               </a>
             </template>
             <template v-else-if="column.key === 'action'">
-              <a-button type="link" danger size="small" @click="removeStock(record)">
-                移除
-              </a-button>
+              <div class="action-btns">
+                <a-button type="link" size="small" @click.stop="collectStock(record)" :loading="collectingMap[record.stock_code]">
+                  <CloudDownloadOutlined /> 采集
+                </a-button>
+                <a-button type="link" danger size="small" @click.stop="removeStock(record)">
+                  移除
+                </a-button>
+              </div>
             </template>
             <template v-else-if="column.key === 'latest_report'">
               <span v-if="record.latest_report">{{ record.latest_report.report_name }}</span>
@@ -128,6 +133,7 @@ const router = useRouter()
 const loading = ref(false)
 const collecting = ref(false)
 const watchlist = ref<WatchlistItem[]>([])
+const collectingMap = ref<Record<string, boolean>>({})
 
 const addModalVisible = ref(false)
 const addKeyword = ref('')
@@ -210,11 +216,32 @@ async function collectAll() {
   collecting.value = true
   try {
     await collectorApi.triggerCollect('watchlist')
-    message.success('采集任务已启动，稍后刷新页面查看数据')
+    message.success('采集任务已启动，数据正在后台采集，请稍候刷新查看')
+    // 5秒后自动刷新
+    setTimeout(() => {
+      loadWatchlist()
+    }, 5000)
   } catch (e) {
     message.error('启动采集失败')
   } finally {
     collecting.value = false
+  }
+}
+
+async function collectStock(record: WatchlistItem) {
+  if (collectingMap.value[record.stock_code]) return
+  collectingMap.value[record.stock_code] = true
+  try {
+    await collectorApi.triggerCollect('single', record.stock_code)
+    message.success(`已开始采集 ${record.stock_name}，请稍候刷新查看`)
+    // 8秒后自动刷新
+    setTimeout(() => {
+      loadWatchlist()
+      collectingMap.value[record.stock_code] = false
+    }, 8000)
+  } catch (e) {
+    message.error('启动采集失败')
+    collectingMap.value[record.stock_code] = false
   }
 }
 
@@ -393,5 +420,12 @@ onMounted(() => {
   font-size: 12px;
   color: #999;
   margin-left: auto;
+}
+
+.action-btns {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
 }
 </style>

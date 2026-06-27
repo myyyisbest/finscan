@@ -36,23 +36,79 @@ def search_stock(
     keyword: str = Query(..., min_length=1, description="搜索关键词（代码或名称）"),
     db: Session = Depends(get_db),
 ):
-    """搜索股票：支持代码或名称模糊匹配。"""
+    """搜索股票：先查本地数据库，没有则通过akshare实时搜索并入库。"""
     kw = keyword.strip()
+
+    # 先查本地数据库
     query = db.query(StockBasic)
     if kw.isdigit():
-        results = query.filter(StockBasic.stock_code.like(f"%{kw}%")).limit(20).all()
+        local_results = query.filter(StockBasic.stock_code.like(f"%{kw}%")).limit(20).all()
     else:
-        results = query.filter(
+        local_results = query.filter(
             (StockBasic.stock_name.like(f"%{kw}%")) |
             (StockBasic.stock_code.like(f"%{kw}%"))
         ).limit(20).all()
-    return success_response([{
-        "stock_code": s.stock_code,
-        "stock_name": s.stock_name,
-        "market": s.market,
-        "secucode": s.secucode or s.secucode_format(),
-        "industry": s.industry,
-    } for s in results])
+
+    # 本地有结果直接返回
+    if local_results:
+        return success_response([{
+            "stock_code": s.stock_code,
+            "stock_name": s.stock_name,
+            "market": s.market,
+            "secucode": s.secucode or s.secucode_format(),
+            "industry": s.industry,
+        } for s in local_results])
+
+    # 本地无结果，通过akshare实时搜索
+    try:
+        import akshare as ak
+        # 使用沪深京A股列表接口获取所有股票列表进行搜索
+        df = ak.stock_zh_a_spot_em()
+        if df is not None and len(df) > 0:
+            # 过滤匹配的结果
+            if kw.isdigit():
+                matched = df[df['代码'].astype(str).str.contains(kw, na=False)].head(20)
+            else:
+                matched = df[
+                    df['名称'].astype(str).str.contains(kw, na=False) |
+                    df['代码'].astype(str).str.contains(kw, na=False)
+                ].head(20)
+
+            results = []
+            for _, row in matched.iterrows():
+                code = str(row.get('代码', ''))
+                name = str(row.get('名称', ''))
+                industry = str(row.get('所属行业', '')) if '所属行业' in row else None
+                if industry == 'nan':
+                    industry = None
+
+                # 自动入库到stock_basic
+                existing = db.query(StockBasic).filter(StockBasic.stock_code == code).first()
+                if not existing:
+                    market = _detect_market(code)
+                    s = StockBasic(
+                        stock_code=code,
+                        market=market,
+                        secucode=f"{market}{code}",
+                        stock_name=name,
+                        industry=industry,
+                    )
+                    db.add(s)
+
+                results.append({
+                    "stock_code": code,
+                    "stock_name": name,
+                    "market": _detect_market(code),
+                    "secucode": f"{_detect_market(code)}{code}",
+                    "industry": industry,
+                })
+
+            db.commit()
+            return success_response(results)
+    except Exception as e:
+        log.warning("akshare 搜索失败: %s", e)
+
+    return success_response([])
 
 
 @router.get("/{code}")
