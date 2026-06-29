@@ -379,8 +379,6 @@ const RuleCard = {
   }
 }
 
-const { h } = require('vue')
-
 const selectedCode = ref<string>('')
 const searchResults = ref<SearchResult[]>([])
 const watchlistStocks = ref<SearchResult[]>([])
@@ -535,14 +533,23 @@ async function loadWatchlistStocks() {
   }
   try {
     const res = await watchlistApi.list()
-    if (res.code === 0) {
+    if (res.code === 0 && (res.data || []).length > 0) {
       watchlistStocks.value = (res.data || []).map((s: any) => ({
         code: s.stock_code,
         name: s.stock_name,
       }))
+    } else {
+      watchlistStocks.value = sampleStocks.map(s => ({
+        code: s.code,
+        name: s.name,
+      }))
     }
   } catch (e) {
     console.error('Failed to load watchlist:', e)
+    watchlistStocks.value = sampleStocks.map(s => ({
+      code: s.code,
+      name: s.name,
+    }))
   }
 }
 
@@ -565,8 +572,9 @@ async function analyze() {
   }, 800)
 
   try {
-    if (isCapacitor) {
-      const stock = sampleStocks.find(s => s.code === selectedCode.value)
+    const sampleStock = sampleStocks.find(s => s.code === selectedCode.value)
+    if (isCapacitor || sampleStock) {
+      const stock = sampleStock
       if (!stock) {
         message.error('未找到股票数据')
         return
