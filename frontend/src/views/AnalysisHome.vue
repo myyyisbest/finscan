@@ -224,6 +224,10 @@ function goToStock(code: string) {
   font-size: 15px;
   outline: none;
   background: #fff;
+  color: #1e293b;
+}
+.search-input::placeholder {
+  color: #94a3b8;
 }
 .search-btn {
   height: 48px;
